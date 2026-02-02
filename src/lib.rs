@@ -1,3 +1,7 @@
+pub mod crypto;
+pub mod auth;
+pub mod protocol;
+pub mod models;
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
