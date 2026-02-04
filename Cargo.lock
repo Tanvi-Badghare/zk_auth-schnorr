@@ -780,6 +780,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "curve25519-dalek",
+ "digest",
  "hex",
  "rand",
  "serde",
