@@ -1,32 +1,56 @@
-# zk-auth
+# zk-auth — Zero-Knowledge Authentication Prototype
 
-A research-oriented implementation of zero-knowledge authentication using:
+zk-auth is a **research-driven implementation of zero-knowledge authentication**
+designed to explore how passwordless authentication can be achieved **without
+revealing secrets**, even to the authenticating server.
 
-- Schnorr Identification
-- Fiat-Shamir Transform
-- Security-focused design
+This project focuses on **cryptographic correctness, adversarial analysis, and
+protocol tradeoffs**, rather than production deployment.
 
-## Goals
+---
 
-This project explores:
+## Why zk-auth?
 
-- Practical ZK authentication
-- Security pitfalls and attacks
-- Protocol evaluation and benchmarking
+Traditional authentication systems suffer from at least one of the following:
 
-## Status
+- Server-side secret exposure
+- Replayable credentials
+- Phishing and credential stuffing
+- Heavy reliance on trusted hardware or browsers
 
-🚧 Work in progress — research prototype.
+zk-auth explores whether **zero-knowledge identification protocols**
+(Schnorr + Fiat–Shamir) can address some of these weaknesses while introducing
+new, explicit tradeoffs.
 
-## Structure
+This is **not** a replacement for WebAuthn or OIDC — it is an exploration of
+where zero-knowledge authentication *might* make sense and where it clearly
+does not.
 
-- `crypto/` — cryptographic primitives
-- `auth/` — authentication logic
-- `protocol/` — protocol flows
-- `models/` — core data structures
-- `attacks/` — attack demonstrations
-- `experiments/` — performance studies
+---
 
-## Disclaimer
+## What this project demonstrates
 
-This is a research project and NOT production-ready crypto.
+- Zero-knowledge authentication using Schnorr Identification
+- Non-interactive proofs via the Fiat–Shamir transform
+- Explicit threat modeling and attack simulations
+- Cryptographic benchmarking and performance analysis
+- Known failure modes (timing, weak RNGs, replay)
+
+This project intentionally includes **attacks and failures** to highlight
+real-world risks in cryptographic protocol design.
+
+---
+
+## What this project is NOT
+
+- ❌ Production-ready authentication
+- ❌ A drop-in replacement for WebAuthn, Passkeys, or OAuth
+- ❌ Audited or hardened cryptographic software
+
+This code exists for **learning, evaluation, and research discussion**.
+
+---
+
+## Project structure
+
+
