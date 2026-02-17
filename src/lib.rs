@@ -5,47 +5,40 @@
 //!
 //! ## Module Overview
 //!
-//! - [`crypto`] — Low-level primitives: curve operations, hashing, Schnorr, Fiat–Shamir.
-//! - [`models`] — Core data types: keypairs, proofs.
-//! - [`protocol`] — Registration and authentication state machines.
-//! - [`auth`] — Prover / verifier roles and the end-to-end flow.
-//! - [`config`] — System-wide parameters and configuration.
-//! - [`errors`] — Unified error type and `Result` alias.
+//! - [`crypto`] — Low-level primitives: curve operations, hashing, Schnorr, Fiat–Shamir  
+//! - [`models`] — Core data types: keypairs, proofs  
+//! - [`protocol`] — Registration and authentication logic  
+//! - [`auth`] — Prover / verifier roles and full flows  
+//! - [`config`] — System-wide configuration  
+//! - [`errors`] — Unified error and `Result` types  
 //!
-//! ⚠️  **Experimental** — not audited, not production-ready.
+//! ⚠️ **Security Notice**
+//! This library is experimental and intended for research and learning.
+//! It has NOT been audited and MUST NOT be used in production.
+
+// For a crypto project, this is a strong safety signal.
+#![forbid(unsafe_code)]
 
 // ---------------------------------------------------------------------------
 // Public modules
 // ---------------------------------------------------------------------------
 
-/// Unified error types for the entire library.
 pub mod errors;
-
-/// System-wide configuration and parameters.
 pub mod config;
-
-/// Low-level cryptographic primitives.
 pub mod crypto;
-
-/// Core data structures (keypairs, proofs).
 pub mod models;
-
-/// Registration and authentication protocol logic.
 pub mod protocol;
-
-/// Prover, verifier, and the composed authentication flow.
 pub mod auth;
 
 // ---------------------------------------------------------------------------
-// Test-only modules  (never compiled into the library binary)
+// Test-only modules
 // ---------------------------------------------------------------------------
 
-/// Shared helpers for unit and integration tests.
 #[cfg(test)]
 pub mod test_utils;
 
 // ---------------------------------------------------------------------------
-// Convenience re-exports  (so downstream can write `zk_auth::Result<T>`)
+// Re-exports
 // ---------------------------------------------------------------------------
 
-pub use errors::{ZkAuthError, Result};
+pub use errors::{Result, ZkAuthError};
