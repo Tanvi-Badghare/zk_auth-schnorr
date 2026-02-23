@@ -1,225 +1,116 @@
-//! Schnorr identification protocol (non-interactive via Fiat–Shamir).
+//! Schnorr Identification Protocol over Ristretto.
 //!
-//! This module implements the classic Schnorr sigma protocol, made
-//! non-interactive through the Fiat–Shamir heuristic.
+//! Proves knowledge of a secret scalar `x` such that:
+//!     P = x * G
+//! without revealing `x`.
 
-use rand::RngCore;
-use serde::{Deserialize, Serialize};
+use crate::crypto::{Scalar, Point, BASEPOINT};
+use crate::crypto::fiat_shamir::compute_challenge;
+use rand_core::{CryptoRng, RngCore};
 
-use super::curves::{Point, Scalar, BASEPOINT};
-use super::hash::{Hasher, hash_to_scalar};
-use crate::config::{POINT_BYTE_LEN, SCALAR_BYTE_LEN};
-use crate::errors::{Result, ZkAuthError};
-
-// ---------------------------------------------------------------------------
-// SchnorrProof
-// ---------------------------------------------------------------------------
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// A Schnorr proof of knowledge.
+///
+/// Contains:
+/// - commitment R
+/// - response s
+#[derive(Debug, Clone)]
 pub struct SchnorrProof {
     pub commitment: Point,
     pub response: Scalar,
 }
 
 impl SchnorrProof {
-    pub fn to_bytes(&self) -> [u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN] {
-        let mut bytes = [0u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN];
+    /// Create a new Schnorr proof.
+    ///
+    /// Proves knowledge of `secret` corresponding to `public`.
+    pub fn prove<R: RngCore + CryptoRng>(
+        secret: &Scalar,
+        public: &Point,
+        message: &[u8],
+        rng: &mut R,
+    ) -> Self {
+        // Step 1: Sample random nonce
+        let nonce = Scalar::random(rng);
 
-        bytes[..POINT_BYTE_LEN].copy_from_slice(&self.commitment.to_bytes());
-        bytes[POINT_BYTE_LEN..].copy_from_slice(&self.response.to_bytes());
+        // Step 2: Compute commitment R = kG
+        let commitment = &nonce * &BASEPOINT;
 
-        bytes
-    }
+        // Step 3: Compute challenge
+        let challenge = compute_challenge(&commitment, public, message);
 
-    pub fn from_bytes(
-        bytes: &[u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN],
-    ) -> Result<Self> {
-        let r_bytes: [u8; POINT_BYTE_LEN] =
-            bytes[..POINT_BYTE_LEN].try_into().map_err(|_| {
-                ZkAuthError::DeserializationError(
-                    "proof commitment (R) wrong length".to_string(),
-                )
-            })?;
+        // Step 4: Compute response s = k + e*x
+        let response = &nonce + &(&challenge * secret);
 
-        let s_bytes: [u8; SCALAR_BYTE_LEN] =
-            bytes[POINT_BYTE_LEN..].try_into().map_err(|_| {
-                ZkAuthError::DeserializationError(
-                    "proof response (s) wrong length".to_string(),
-                )
-            })?;
-
-        let commitment = Point::from_bytes(&r_bytes)?;
-        let response = Scalar::from_bytes(&s_bytes)?;
-
-        Ok(Self {
+        SchnorrProof {
             commitment,
             response,
-        })
+        }
     }
 
-    pub fn serialized_size(&self) -> usize {
-        POINT_BYTE_LEN + SCALAR_BYTE_LEN
+    /// Verify the Schnorr proof.
+    ///
+    /// Returns true if valid.
+    pub fn verify(
+        &self,
+        public: &Point,
+        message: &[u8],
+    ) -> bool {
+        // Recompute challenge
+        let challenge = compute_challenge(&self.commitment, public, message);
+
+        // Left side: sG
+        let lhs = &self.response * &BASEPOINT;
+
+        // Right side: R + eP
+        let rhs = &self.commitment + &(&challenge * public);
+
+        lhs == rhs
     }
 }
-
-// ---------------------------------------------------------------------------
-// Prove
-// ---------------------------------------------------------------------------
-
-pub fn prove<R: RngCore>(
-    secret_key: &Scalar,
-    public_key: &Point,
-    message: &[u8],
-    domain: &str,
-    rng: &mut R,
-) -> Result<SchnorrProof> {
-    // 1. Nonce
-    let nonce = Scalar::random(rng);
-
-    // 2. Commitment
-    let commitment = &nonce * &BASEPOINT;
-
-    // 3. Challenge
-    let challenge = compute_challenge(domain, &commitment, public_key, message);
-
-    // 4. Response
-    let response = nonce + (&challenge * secret_key);
-
-    Ok(SchnorrProof {
-        commitment,
-        response,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Verify
-// ---------------------------------------------------------------------------
-
-pub fn verify(
-    proof: &SchnorrProof,
-    public_key: &Point,
-    message: &[u8],
-    domain: &str,
-) -> Result<bool> {
-    let challenge =
-        compute_challenge(domain, &proof.commitment, public_key, message);
-
-    let lhs = &proof.response * &BASEPOINT;
-    let rhs = &proof.commitment + (&challenge * public_key);
-
-    Ok(lhs == rhs)
-}
-
-// ---------------------------------------------------------------------------
-// Fiat–Shamir challenge
-// ---------------------------------------------------------------------------
-
-fn compute_challenge(
-    domain: &str,
-    commitment: &Point,
-    public_key: &Point,
-    message: &[u8],
-) -> Scalar {
-    let mut hasher = Hasher::new();
-
-    // Domain separation first
-    hasher.update(domain.as_bytes());
-
-    // Transcript elements
-    hasher.update(&commitment.to_bytes());
-    hasher.update(&public_key.to_bytes());
-    hasher.update(message);
-
-    let digest = hasher.finalize();
-
-    // Reduce safely using abstraction
-    hash_to_scalar(&digest)
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::DeterministicRng;
+    use rand_core::OsRng;
 
     #[test]
-    fn prove_and_verify_success() {
-        let mut rng = DeterministicRng::new(1);
+    fn schnorr_proof_verifies() {
+        let mut rng = OsRng;
+
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
 
-        let proof =
-            prove(&secret, &public, b"test message", "test-domain", &mut rng)
-                .unwrap();
+        let message = b"test message";
 
-        let valid =
-            verify(&proof, &public, b"test message", "test-domain").unwrap();
+        let proof = SchnorrProof::prove(&secret, &public, message, &mut rng);
 
-        assert!(valid);
+        assert!(proof.verify(&public, message));
     }
 
     #[test]
-    fn different_domain_fails() {
-        let mut rng = DeterministicRng::new(2);
+    fn schnorr_proof_fails_with_wrong_message() {
+        let mut rng = OsRng;
+
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
 
-        let proof =
-            prove(&secret, &public, b"msg", "A", &mut rng).unwrap();
+        let proof = SchnorrProof::prove(&secret, &public, b"msg1", &mut rng);
 
-        let valid =
-            verify(&proof, &public, b"msg", "B").unwrap();
-
-        assert!(!valid);
+        assert!(!proof.verify(&public, b"msg2"));
     }
 
     #[test]
-    fn different_message_fails() {
-        let mut rng = DeterministicRng::new(3);
+    fn schnorr_proof_fails_with_wrong_public_key() {
+        let mut rng = OsRng;
+
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
 
-        let proof =
-            prove(&secret, &public, b"A", "domain", &mut rng).unwrap();
+        let wrong_secret = Scalar::random(&mut rng);
+        let wrong_public = &wrong_secret * &BASEPOINT;
 
-        let valid =
-            verify(&proof, &public, b"B", "domain").unwrap();
+        let proof = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
 
-        assert!(!valid);
-    }
-
-    #[test]
-    fn tampered_proof_fails() {
-        let mut rng = DeterministicRng::new(4);
-        let secret = Scalar::random(&mut rng);
-        let public = &secret * &BASEPOINT;
-
-        let mut proof =
-            prove(&secret, &public, b"msg", "domain", &mut rng).unwrap();
-
-        proof.response = Scalar::random(&mut rng);
-
-        let valid =
-            verify(&proof, &public, b"msg", "domain").unwrap();
-
-        assert!(!valid);
-    }
-
-    #[test]
-    fn serialization_round_trip() {
-        let mut rng = DeterministicRng::new(5);
-        let secret = Scalar::random(&mut rng);
-        let public = &secret * &BASEPOINT;
-
-        let proof =
-            prove(&secret, &public, b"msg", "domain", &mut rng).unwrap();
-
-        let bytes = proof.to_bytes();
-        let recovered = SchnorrProof::from_bytes(&bytes).unwrap();
-
-        assert_eq!(proof, recovered);
+        assert!(!proof.verify(&wrong_public, b"msg"));
     }
 }
