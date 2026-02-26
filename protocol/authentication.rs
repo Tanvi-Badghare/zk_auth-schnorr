@@ -7,24 +7,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::crypto::curves::Point;
 use crate::crypto::fiat_shamir::Transcript;
-use crate::crypto::schnorr::SchnorrProof;
 use crate::errors::{Result, ZkAuthError};
-use crate::models::keypair::Keypair;
+use crate::models::{AuthenticationProof, Keypair};
 use crate::protocol::registration::Registry;
 
-// ---------------------------------------------------------------------------
-// Domain constant
-// ---------------------------------------------------------------------------
-
-const AUTHENTICATION_DOMAIN: &str = "zkauth-authentication-v1";
+const AUTH_DOMAIN: &str = "zkauth-authentication-v1";
+const SESSION_DOMAIN: &[u8] = b"zkauth-session-token-v1";
 const NONCE_LEN: usize = 32;
-
-/// Upper bound on pending nonces to prevent unbounded memory growth.
 const MAX_PENDING_NONCES: usize = 10_000;
-
-// ---------------------------------------------------------------------------
-// AuthChallenge
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthChallenge {
@@ -44,14 +34,10 @@ impl AuthChallenge {
     }
 }
 
-// ---------------------------------------------------------------------------
-// AuthProof
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthProof {
     pub username: String,
-    pub proof: SchnorrProof,
+    pub proof: AuthenticationProof,
 }
 
 impl AuthProof {
@@ -60,13 +46,13 @@ impl AuthProof {
         keypair: &Keypair,
         rng: &mut R,
     ) -> Result<Self> {
-        let binding = build_transcript_binding(
+        let binding = build_binding(
             &challenge.username,
             keypair.public_key(),
             &challenge.nonce,
         );
 
-        let proof = SchnorrProof::prove(
+        let schnorr = crate::crypto::schnorr::SchnorrProof::prove(
             keypair.secret_key(),
             keypair.public_key(),
             &binding,
@@ -75,14 +61,10 @@ impl AuthProof {
 
         Ok(Self {
             username: challenge.username.clone(),
-            proof,
+            proof: AuthenticationProof::from_schnorr(schnorr),
         })
     }
 }
-
-// ---------------------------------------------------------------------------
-// AuthResult
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct AuthResult {
@@ -90,22 +72,18 @@ pub struct AuthResult {
     pub session_token: Vec<u8>,
 }
 
-// ---------------------------------------------------------------------------
-// Authenticator
-// ---------------------------------------------------------------------------
-
 pub struct Authenticator<'r> {
     registry: &'r Registry,
-    pending_nonces: HashMap<[u8; NONCE_LEN], String>,
-    consumed_nonces: HashSet<[u8; NONCE_LEN]>,
+    pending: HashMap<([u8; NONCE_LEN], String), ()>,
+    consumed: HashSet<[u8; NONCE_LEN]>,
 }
 
 impl<'r> Authenticator<'r> {
     pub fn new(registry: &'r Registry) -> Self {
         Self {
             registry,
-            pending_nonces: HashMap::new(),
-            consumed_nonces: HashSet::new(),
+            pending: HashMap::new(),
+            consumed: HashSet::new(),
         }
     }
 
@@ -115,18 +93,16 @@ impl<'r> Authenticator<'r> {
         rng: &mut R,
     ) -> Result<AuthChallenge> {
         if self.registry.lookup(username).is_none() {
-            return Err(ZkAuthError::UserNotFound);
+            return Err(ZkAuthError::UserNotFound(username.into()));
         }
 
-        if self.pending_nonces.len() >= MAX_PENDING_NONCES {
+        if self.pending.len() >= MAX_PENDING_NONCES {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
         let challenge = AuthChallenge::new(username, rng);
-
-        self.pending_nonces
-            .insert(challenge.nonce, challenge.username.clone());
-
+        self.pending
+            .insert((challenge.nonce, challenge.username.clone()), ());
         Ok(challenge)
     }
 
@@ -135,64 +111,36 @@ impl<'r> Authenticator<'r> {
         proof: &AuthProof,
         challenge: &AuthChallenge,
     ) -> Result<AuthResult> {
-        self.verify_inner(proof, challenge)
-            .map_err(|_| ZkAuthError::AuthenticationFailed)
-    }
-
-    fn verify_inner(
-        &mut self,
-        auth_proof: &AuthProof,
-        challenge: &AuthChallenge,
-    ) -> Result<AuthResult> {
-        if auth_proof.username != challenge.username {
-            return Err(ZkAuthError::AuthenticationFailed);
-        }
-
         let record = self
             .registry
-            .lookup(&auth_proof.username)
-            .ok_or(ZkAuthError::UserNotFound)?;
+            .lookup(&proof.username)
+            .ok_or(ZkAuthError::UserNotFound(proof.username.clone()))?;
 
-        let public_key = &record.public_key;
-
-        match self.pending_nonces.get(&challenge.nonce) {
-            Some(expected_user) if expected_user == &challenge.username => {}
-            _ => return Err(ZkAuthError::AuthenticationFailed),
-        }
-
-        if self.consumed_nonces.contains(&challenge.nonce) {
+        if !self.pending.contains_key(&(challenge.nonce, challenge.username.clone()))
+            || self.consumed.contains(&challenge.nonce)
+        {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
         let binding =
-            build_transcript_binding(&auth_proof.username, public_key, &challenge.nonce);
+            build_binding(&proof.username, &record.public_key, &challenge.nonce);
 
-        if !auth_proof.proof.verify(public_key, &binding) {
-            return Err(ZkAuthError::VerificationFailed);
+        if !proof.proof.inner().verify(&record.public_key, &binding) {
+            return Err(ZkAuthError::AuthenticationFailed);
         }
 
-        self.pending_nonces.remove(&challenge.nonce);
-        self.consumed_nonces.insert(challenge.nonce);
-
-        let session_token = derive_session_token(&auth_proof.username, &challenge.nonce);
+        self.pending.remove(&(challenge.nonce, challenge.username.clone()));
+        self.consumed.insert(challenge.nonce);
 
         Ok(AuthResult {
-            username: auth_proof.username.clone(),
-            session_token,
+            username: proof.username.clone(),
+            session_token: derive_session_token(&proof.username, &challenge.nonce),
         })
     }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn build_transcript_binding(
-    username: &str,
-    public_key: &Point,
-    nonce: &[u8; NONCE_LEN],
-) -> Vec<u8> {
-    let mut transcript = Transcript::new(AUTHENTICATION_DOMAIN);
+fn build_binding(username: &str, public_key: &Point, nonce: &[u8; NONCE_LEN]) -> Vec<u8> {
+    let mut transcript = Transcript::new(AUTH_DOMAIN);
     transcript.append_message("username", username.as_bytes());
     transcript.append_point("public_key", public_key);
     transcript.append_message("nonce", nonce);
@@ -201,9 +149,9 @@ fn build_transcript_binding(
 
 fn derive_session_token(username: &str, nonce: &[u8; NONCE_LEN]) -> Vec<u8> {
     use crate::crypto::hash::Hasher;
+
     let mut h = Hasher::new();
-    h.update(b"session-token-v1");
-    h.update(&(username.len() as u64).to_le_bytes());
+    h.update(SESSION_DOMAIN);
     h.update(username.as_bytes());
     h.update(nonce);
     h.finalize().to_vec()
