@@ -1,4 +1,6 @@
 # zkauth-rs — Zero-Knowledge Authentication Protocol in Rust
+## This project explores cryptographic protocol design and trade-offs. It is not production-ready and should not be used in real systems.
+
 
 zkauth-rs is a research-oriented implementation of a zero-knowledge
 authentication protocol based on the Schnorr identification scheme
