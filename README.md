@@ -1,97 +1,113 @@
-# zkauth-rs — Zero-Knowledge Authentication Protocol in Rust
-## This project explores cryptographic protocol design and trade-offs. It is not production-ready and should not be used in real systems.
+# zkauth-rs — Schnorr-Based Zero-Knowledge Authentication in Rust
 
-
-zkauth-rs is a research-oriented implementation of a zero-knowledge
-authentication protocol based on the Schnorr identification scheme
-and the Fiat–Shamir transform.
-
-The system demonstrates how authentication can be achieved without
-storing passwords or transmitting reusable credentials, while
-explicitly modeling adversarial behavior and protocol tradeoffs.
-
-This project prioritizes cryptographic correctness, replay resistance,
-and protocol-level security reasoning over production deployment.
+> ⚠️ Research Software Notice  
+> This project explores cryptographic protocol design and security trade-offs.  
+> It is experimental, unaudited, and MUST NOT be used in production systems.
 
 ---
 
-## Motivation
+## Overview
 
-Traditional authentication systems often rely on:
+`zkauth-rs` is a research-oriented implementation of a zero-knowledge
+authentication protocol based on:
 
-- Server-side secret storage
-- Reusable credentials
-- Phishable authentication flows
-- Implicit trust in complex identity ecosystems
+- The Schnorr Identification Protocol
+- The Fiat–Shamir transform (Random Oracle Model)
 
-zkauth-rs explores whether zero-knowledge identification protocols
-can mitigate some of these risks while introducing explicit,
-analyzable tradeoffs.
+The system demonstrates how authentication can be achieved without:
 
-This is not a replacement for WebAuthn, OAuth, or OIDC.
-It is an applied cryptography exploration of where zero-knowledge
-authentication makes sense — and where it does not.
+- Storing passwords
+- Transmitting reusable credentials
+- Exposing secrets to the authenticating server
 
----
-
-## Core Features
-
-- Schnorr-based zero-knowledge authentication
-- Non-interactive proofs via the Fiat–Shamir transform
-- Domain separation to prevent cross-protocol attacks
-- Replay protection using server-issued nonces
-- Explicit threat modeling and security documentation
-- Benchmarks for cryptographic performance analysis
-- Structured attack simulations in tests
-
-The project emphasizes protocol composition, adversarial thinking,
-and implementation-level security invariants.
+The implementation explicitly models adversarial behavior and protocol invariants,
+prioritizing cryptographic correctness and replay resistance over deployment concerns.
 
 ---
 
-## Security Model
+## Cryptographic Construction
 
-The system assumes:
+The protocol operates in a prime-order group and follows:
 
-- Honest-but-curious or malicious servers
+- Commitment:  
+  R = g^r
+- Challenge (Fiat–Shamir):  
+  c = H(R || public_key || server_nonce || username)
+- Response:  
+  z = r + c * x mod q
+- Verification:  
+  g^z = R * Y^c
+
+Security relies on:
+
+- Discrete Logarithm Hardness
+- Random Oracle Model (Fiat–Shamir)
+- Secure nonce generation
+- Transcript binding (identity + nonce)
+
+---
+
+## Security Properties
+
+- Zero-knowledge (no secret leakage)
+- Soundness (forgery resistance)
+- Replay resistance via server-issued nonces
+- Identity binding within transcript
+- Domain separation for cross-protocol safety
+
+---
+
+## Threat Model
+
+Assumes:
+
 - Active network adversaries
 - Replay and tampering attempts
-- No trusted hardware assumptions
+- Malicious clients
+- Honest-but-curious servers
 
-Replay protection, transcript binding, and domain separation are
-explicitly enforced at the protocol level.
+Does NOT defend against:
 
-See the `docs/` directory for detailed threat modeling and
-security discussions.
-
----
-
-## What This Project Is Not
-
-- ❌ Production-ready authentication software
-- ❌ A drop-in replacement for WebAuthn, Passkeys, or OAuth
-- ❌ Audited or formally verified cryptographic software
-
-This repository exists for learning, evaluation, and security research.
+- Side-channel attacks
+- Timing attacks
+- Compromised client devices
+- Denial-of-service attacks
+- Formal cryptographic verification
 
 ---
 
 ## Project Structure
+src/
+├── crypto/ # Schnorr, hashing, group operations
+├── models/ # Keypair, proofs
+├── protocol/ # Registration and authentication logic
+├── config/ # System configuration
+├── errors/ # Unified error types
+├── auth/ # Prover / verifier flows
+tests/ # Soundness, replay, integration tests
 
 
 ---
 
 ## Educational Focus
 
-This project intentionally includes:
+This repository intentionally includes:
 
-- Attack simulations
-- Explicit failure cases
-- Discussion of weak RNG risks
-- Security boundary analysis
+- Structured attack simulations
+- Explicit failure case tests
+- Replay modeling
+- Weak RNG analysis
+- Protocol invariant enforcement
 
-The goal is to demonstrate how applied cryptographic systems must be
-designed with adversaries in mind.
+It is designed as an applied cryptography learning and research artifact.
+
+---
+
+## What This Project Is Not
+
+- ❌ Production-ready authentication software
+- ❌ A replacement for WebAuthn / OAuth / OIDC
+- ❌ Formally verified cryptographic code
 
 ---
 
