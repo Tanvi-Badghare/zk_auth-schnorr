@@ -50,6 +50,13 @@ impl Scalar {
     pub(crate) fn inner(&self) -> &DalekScalar {
         &self.0
     }
+
+    /// Construct directly from a DalekScalar.
+    /// Used by hash_to_scalar — the caller is responsible for ensuring
+    /// the value was produced by a wide reduction (no bias).
+    pub(crate) fn from_dalek(s: DalekScalar) -> Self {
+        Self(s)
+    }
 }
 
 // --- Scalar arithmetic ---
@@ -189,6 +196,48 @@ impl Mul<&Point> for &Scalar {
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(self.to_bytes()))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// point_serde — mirrors scalar_serde exactly but for RistrettoPoint
+// ---------------------------------------------------------------------------
+// FIX: This module was missing entirely, causing the compiler error:
+//   "use of unresolved module or unlinked crate `point_serde`"
+// The #[serde(with = "point_serde")] attribute on Point requires this
+// module to exist inline in the same file, just like scalar_serde above.
+// ---------------------------------------------------------------------------
+
+mod point_serde {
+    use super::*;
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(point: &RistrettoPoint, ser: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Compress to canonical 32-byte Ristretto encoding before serialising.
+        ser.serialize_bytes(&point.compress().to_bytes())
+    }
+
+    pub fn deserialize<'de, D>(de: D) -> std::result::Result<RistrettoPoint, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bytes: &[u8] = Deserialize::deserialize(de)?;
+
+        if bytes.len() != POINT_BYTE_LEN {
+            return Err(serde::de::Error::custom("point must be 32 bytes"));
+        }
+
+        let mut arr = [0u8; POINT_BYTE_LEN];
+        arr.copy_from_slice(bytes);
+
+        // decompress() validates the canonical Ristretto encoding.
+        // An invalid or non-canonical encoding is rejected here.
+        CompressedRistretto(arr)
+            .decompress()
+            .ok_or_else(|| serde::de::Error::custom("invalid Ristretto point encoding"))
     }
 }
 
