@@ -8,7 +8,7 @@ use curve25519_dalek::{
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar as DalekScalar,
 };
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -27,7 +27,7 @@ pub struct Scalar(
 );
 
 impl Scalar {
-    pub fn random<R: RngCore>(rng: &mut R) -> Self {
+    pub fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         Self(DalekScalar::random(rng))
     }
 

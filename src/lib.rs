@@ -25,9 +25,7 @@ pub mod auth;
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
-pub mod tests {
-    pub mod test_utils.rs;  // now looks for src/tests/test_utils.rs
-}
+pub mod test_utils;
 
 // ---------------------------------------------------------------------------
 // Re-exports
