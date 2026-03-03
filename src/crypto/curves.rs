@@ -32,7 +32,10 @@ impl Scalar {
     }
 
     pub fn from_bytes(bytes: &[u8; SCALAR_BYTE_LEN]) -> Result<Self> {
+        // FIX: dalek v4 returns subtle::CtOption<Scalar>, not Option<Scalar>.
+        // .into_option() converts CtOption → Option so .map() and .ok_or() work.
         DalekScalar::from_canonical_bytes(*bytes)
+            .into_option()
             .map(Self)
             .ok_or(ZkAuthError::InvalidScalar)
     }
@@ -52,8 +55,8 @@ impl Scalar {
     }
 
     /// Construct directly from a DalekScalar.
-    /// Used by hash_to_scalar — the caller is responsible for ensuring
-    /// the value was produced by a wide reduction (no bias).
+    /// Used by hash_to_scalar — caller must ensure value came from a
+    /// wide reduction (no bias).
     pub(crate) fn from_dalek(s: DalekScalar) -> Self {
         Self(s)
     }
@@ -126,7 +129,10 @@ mod scalar_serde {
         let mut arr = [0u8; SCALAR_BYTE_LEN];
         arr.copy_from_slice(bytes);
 
+        // FIX: dalek v4 returns subtle::CtOption<Scalar>, not Option<Scalar>.
+        // .into_option() converts CtOption → Option so .ok_or_else() works.
         DalekScalar::from_canonical_bytes(arr)
+            .into_option()
             .ok_or_else(|| serde::de::Error::custom("invalid scalar"))
     }
 }
@@ -202,11 +208,6 @@ impl fmt::Display for Point {
 // ---------------------------------------------------------------------------
 // point_serde — mirrors scalar_serde exactly but for RistrettoPoint
 // ---------------------------------------------------------------------------
-// FIX: This module was missing entirely, causing the compiler error:
-//   "use of unresolved module or unlinked crate `point_serde`"
-// The #[serde(with = "point_serde")] attribute on Point requires this
-// module to exist inline in the same file, just like scalar_serde above.
-// ---------------------------------------------------------------------------
 
 mod point_serde {
     use super::*;
@@ -216,7 +217,6 @@ mod point_serde {
     where
         S: Serializer,
     {
-        // Compress to canonical 32-byte Ristretto encoding before serialising.
         ser.serialize_bytes(&point.compress().to_bytes())
     }
 
@@ -233,8 +233,8 @@ mod point_serde {
         let mut arr = [0u8; POINT_BYTE_LEN];
         arr.copy_from_slice(bytes);
 
-        // decompress() validates the canonical Ristretto encoding.
-        // An invalid or non-canonical encoding is rejected here.
+        // decompress() returns Option<RistrettoPoint> in both v3 and v4 —
+        // no .into_option() needed here.
         CompressedRistretto(arr)
             .decompress()
             .ok_or_else(|| serde::de::Error::custom("invalid Ristretto point encoding"))
