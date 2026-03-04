@@ -21,10 +21,17 @@ pub mod protocol;
 pub mod auth;
 
 // ---------------------------------------------------------------------------
-// Test-only modules
+// Test utilities
 // ---------------------------------------------------------------------------
+//
+// FIX: was #[cfg(test)] pub mod test_utils
+// #[cfg(test)] makes this invisible to files in tests/ — integration tests
+// compile as a separate crate and cannot see cfg(test) items from zk_auth.
+// Removing the gate makes zk_auth::test_utils importable everywhere.
+//
+// DeterministicRng is documented as non-cryptographic and must never
+// be used in production — the module-level warning enforces this.
 
-#[cfg(test)]
 pub mod test_utils;
 
 // ---------------------------------------------------------------------------
