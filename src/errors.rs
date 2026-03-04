@@ -22,13 +22,6 @@ pub type Result<T> = std::result::Result<T, ZkAuthError>;
 // ---------------------------------------------------------------------------
 
 /// All failure modes that can occur inside zk-auth.
-///
-/// Errors are grouped by architectural layer:
-/// - Crypto layer
-/// - Protocol layer
-/// - Registration / Authentication
-/// - Serialization
-/// - Configuration
 #[derive(Error, Debug)]
 pub enum ZkAuthError {
     // =====================================================================
@@ -84,6 +77,10 @@ pub enum ZkAuthError {
     // Configuration
     // =====================================================================
 
+    // FIX: was &'static str — only accepts compile-time string literals.
+    // config.rs validate() uses format!() to include the actual bad value,
+    // which produces a runtime String. Changing to String accepts both
+    // format!() output and plain string literals (via .to_string() or .into()).
     #[error("Invalid configuration: {0}")]
-    InvalidConfig(&'static str),
+    InvalidConfig(String),
 }
