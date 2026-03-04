@@ -21,7 +21,6 @@ pub type Result<T> = std::result::Result<T, ZkAuthError>;
 // Error enum
 // ---------------------------------------------------------------------------
 
-/// All failure modes that can occur inside zk-auth.
 #[derive(Error, Debug)]
 pub enum ZkAuthError {
     // =====================================================================
@@ -41,11 +40,9 @@ pub enum ZkAuthError {
     // Protocol-layer errors
     // =====================================================================
 
-    /// Collapsed verification failure to avoid side-channel leakage.
     #[error("Verification failed")]
     VerificationFailed,
 
-    /// Transcript construction or domain separation failure.
     #[error("Transcript error")]
     TranscriptError,
 
@@ -53,13 +50,18 @@ pub enum ZkAuthError {
     // Registration / Authentication
     // =====================================================================
 
-    #[error("User already registered")]
-    UserAlreadyExists,
+    // FIX: was `UserAlreadyExists` (unit variant).
+    // registration.rs calls ZkAuthError::UserAlreadyExists(request.username)
+    // which passes a String — the variant must hold String to match.
+    #[error("User already registered: {0}")]
+    UserAlreadyExists(String),
 
-    #[error("User not found")]
-    UserNotFound,
+    // FIX: was `UserNotFound` (unit variant).
+    // authentication.rs calls ZkAuthError::UserNotFound(username.into())
+    // and ZkAuthError::UserNotFound(proof.username.clone()) — both pass String.
+    #[error("User not found: {0}")]
+    UserNotFound(String),
 
-    /// Collapsed authentication failure.
     #[error("Authentication failed")]
     AuthenticationFailed,
 
@@ -77,10 +79,6 @@ pub enum ZkAuthError {
     // Configuration
     // =====================================================================
 
-    // FIX: was &'static str — only accepts compile-time string literals.
-    // config.rs validate() uses format!() to include the actual bad value,
-    // which produces a runtime String. Changing to String accepts both
-    // format!() output and plain string literals (via .to_string() or .into()).
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 }
