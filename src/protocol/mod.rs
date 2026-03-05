@@ -35,8 +35,8 @@
 //! This separation ensures the protocol layer remains secure,
 //! auditable, and resistant to misuse.
 
-mod authentication;
-mod registration;
+pub mod authentication;
+pub mod registration;
 
 #[doc(inline)]
 pub use authentication::{AuthChallenge, AuthProof, AuthResult, Authenticator};
