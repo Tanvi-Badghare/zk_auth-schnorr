@@ -105,14 +105,18 @@ tests/
 
 ---
 
-## Roadmap
+## Research Roadmap
 
-- [ ] Benchmark suite (`benches/`)
-- [ ] Example flows (`examples/`)
-- [ ] Extended protocol documentation (`docs/`)
-- [ ] Formal security reduction notes
+Future work planned for this project:
 
----
+• Benchmarking authentication throughput and proof generation latency  
+• Evaluating replay resistance under adversarial network conditions  
+• Exploring batch verification of Schnorr proofs  
+• Investigating alternative curves and transcript constructions  
+• Integrating formal protocol verification tools  
+
+These extensions aim to transform the project from an applied prototype
+into a deeper exploration of authentication protocol design.
 
 ## Educational Focus
 
