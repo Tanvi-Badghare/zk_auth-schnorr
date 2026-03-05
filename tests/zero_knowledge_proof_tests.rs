@@ -154,8 +154,8 @@ mod protocol_zk {
         let req1 = RegistrationRequest::new("alice", &kp1, &mut DeterministicRng::new(202)).unwrap();
         let req2 = RegistrationRequest::new("bob",   &kp2, &mut DeterministicRng::new(203)).unwrap();
 
-        assert_ne!(req1.proof.commitment, req2.proof.commitment);
-        assert_ne!(req1.proof.response,   req2.proof.response);
+        assert_ne!(req1.proof.inner().commitment, req2.proof.inner().commitment);
+        assert_ne!(req1.proof.inner().response,   req2.proof.inner().response);
     }
 
     #[test]
@@ -173,8 +173,8 @@ mod protocol_zk {
         let p1 = AuthProof::new(&c1, &kp, &mut DeterministicRng::new(214)).unwrap();
         let p2 = AuthProof::new(&c2, &kp, &mut DeterministicRng::new(215)).unwrap();
 
-        assert_ne!(p1.proof.commitment, p2.proof.commitment);
-        assert_ne!(p1.proof.response,   p2.proof.response);
+        assert_ne!(p1.proof.inner().commitment, p2.proof.inner().commitment);
+        assert_ne!(p1.proof.inner().response,   p2.proof.inner().response);
 
         let r1 = auth.verify(&p1, &c1).unwrap();
         let r2 = auth.verify(&p2, &c2).unwrap();
@@ -196,7 +196,7 @@ mod protocol_zk {
                 let c = auth.issue_challenge("dave", &mut DeterministicRng::new(300 + i)).unwrap();
                 let p = AuthProof::new(&c, &kp, &mut DeterministicRng::new(400 + i)).unwrap();
                 auth.verify(&p, &c).unwrap();
-                p.proof.commitment
+                p.proof.inner().commitment.clone()
             })
             .collect();
 

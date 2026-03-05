@@ -3,9 +3,6 @@
 use std::collections::HashMap;
 
 use rand::{CryptoRng, RngCore};
-// FIX: add CryptoRng — SchnorrProof::prove requires R: RngCore + CryptoRng,
-// so every caller up the chain must propagate the same bound.
-
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::curves::Point;
@@ -24,7 +21,6 @@ pub struct RegistrationRequest {
 }
 
 impl RegistrationRequest {
-    // FIX: R: RngCore → R: RngCore + CryptoRng
     pub fn new<R: RngCore + CryptoRng>(
         username: impl Into<String>,
         keypair: &Keypair,
@@ -57,11 +53,7 @@ impl RegistrationRequest {
 
         let proof = RegistrationProof::from_schnorr(schnorr);
 
-        Ok(Self {
-            username,
-            public_key,
-            proof,
-        })
+        Ok(Self { username, public_key, proof })
     }
 
     pub fn verify(&self) -> Result<()> {
@@ -91,6 +83,12 @@ pub struct Registry {
 }
 
 impl Registry {
+    // FIX: tests call Registry::new() but Registry only derived Default.
+    // Adding new() as a convenience constructor that delegates to Default.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn register(&mut self, request: RegistrationRequest) -> Result<()> {
         request.verify()?;
 
