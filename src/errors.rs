@@ -26,7 +26,6 @@ pub enum ZkAuthError {
     // =====================================================================
     // Crypto-layer errors
     // =====================================================================
-
     #[error("Invalid scalar value")]
     InvalidScalar,
 
@@ -39,7 +38,6 @@ pub enum ZkAuthError {
     // =====================================================================
     // Protocol-layer errors
     // =====================================================================
-
     #[error("Verification failed")]
     VerificationFailed,
 
@@ -68,7 +66,6 @@ pub enum ZkAuthError {
     // =====================================================================
     // Serialization
     // =====================================================================
-
     #[error("Serialization failure")]
     Serialization(#[from] serde_json::Error),
 
@@ -78,7 +75,6 @@ pub enum ZkAuthError {
     // =====================================================================
     // Configuration
     // =====================================================================
-
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 }

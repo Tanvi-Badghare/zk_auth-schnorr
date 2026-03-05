@@ -1,19 +1,11 @@
 //! System-wide configuration for zk-auth.
 
-use serde::{Deserialize, Serialize};
 use crate::errors::{Result, ZkAuthError};
-
-// ---------------------------------------------------------------------------
-// Crypto-layer constants
-// ---------------------------------------------------------------------------
+use serde::{Deserialize, Serialize};
 
 pub const SCALAR_BYTE_LEN: usize = 32;
 pub const POINT_BYTE_LEN: usize = 32;
 pub const HASH_BYTE_LEN: usize = 32;
-
-// ---------------------------------------------------------------------------
-// CryptoConfig
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CryptoConfig {
@@ -32,10 +24,6 @@ impl Default for CryptoConfig {
     }
 }
 
-// ---------------------------------------------------------------------------
-// FiatShamirConfig
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FiatShamirConfig {
     pub domain_separator: String,
@@ -43,15 +31,9 @@ pub struct FiatShamirConfig {
 
 impl Default for FiatShamirConfig {
     fn default() -> Self {
-        Self {
-            domain_separator: "zk-auth-v0.1".to_string(),
-        }
+        Self { domain_separator: "zk-auth-v0.1".to_string() }
     }
 }
-
-// ---------------------------------------------------------------------------
-// ProtocolConfig
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProtocolConfig {
@@ -61,16 +43,9 @@ pub struct ProtocolConfig {
 
 impl Default for ProtocolConfig {
     fn default() -> Self {
-        Self {
-            max_username_len: 64,
-            nonce_byte_len: 32,
-        }
+        Self { max_username_len: 64, nonce_byte_len: 32 }
     }
 }
-
-// ---------------------------------------------------------------------------
-// SecurityConfig
-// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SecurityConfig {
@@ -83,11 +58,9 @@ impl Default for SecurityConfig {
     }
 }
 
-// ---------------------------------------------------------------------------
-// ZkAuthConfig
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+// FIX: clippy::derivable_impls — the manual Default just calls ::default()
+// on every field. Replace with #[derive(Default)].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ZkAuthConfig {
     pub crypto: CryptoConfig,
     pub fiat_shamir: FiatShamirConfig,
@@ -95,78 +68,52 @@ pub struct ZkAuthConfig {
     pub security: SecurityConfig,
 }
 
-impl Default for ZkAuthConfig {
-    fn default() -> Self {
-        Self {
-            crypto: CryptoConfig::default(),
-            fiat_shamir: FiatShamirConfig::default(),
-            protocol: ProtocolConfig::default(),
-            security: SecurityConfig::default(),
-        }
-    }
-}
-
 impl ZkAuthConfig {
     pub fn validate(&self) -> Result<()> {
-        // InvalidConfig(String) — format!() already produces String.
-        // Bare string literals need .to_string() to coerce &str → String.
-
         if self.crypto.scalar_byte_len != SCALAR_BYTE_LEN {
             return Err(ZkAuthError::InvalidConfig(format!(
                 "scalar_byte_len must be {}, got {}",
                 SCALAR_BYTE_LEN, self.crypto.scalar_byte_len
             )));
         }
-
         if self.crypto.point_byte_len != POINT_BYTE_LEN {
             return Err(ZkAuthError::InvalidConfig(format!(
                 "point_byte_len must be {}, got {}",
                 POINT_BYTE_LEN, self.crypto.point_byte_len
             )));
         }
-
         if self.crypto.hash_byte_len != HASH_BYTE_LEN {
             return Err(ZkAuthError::InvalidConfig(format!(
                 "hash_byte_len must be {}, got {}",
                 HASH_BYTE_LEN, self.crypto.hash_byte_len
             )));
         }
-
         if self.fiat_shamir.domain_separator.is_empty() {
             return Err(ZkAuthError::InvalidConfig(
                 "fiat_shamir.domain_separator must not be empty".to_string(),
             ));
         }
-
         if self.protocol.max_username_len == 0 {
             return Err(ZkAuthError::InvalidConfig(
                 "protocol.max_username_len must be > 0".to_string(),
             ));
         }
-
         if self.protocol.nonce_byte_len < 16 {
             return Err(ZkAuthError::InvalidConfig(format!(
                 "protocol.nonce_byte_len must be >= 16, got {}",
                 self.protocol.nonce_byte_len
             )));
         }
-
         Ok(())
     }
 
     pub fn with_domain(domain: &str) -> Self {
         Self {
-            fiat_shamir: FiatShamirConfig {
-                domain_separator: domain.to_string(),
-            },
+            fiat_shamir: FiatShamirConfig { domain_separator: domain.to_string() },
             ..Self::default()
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

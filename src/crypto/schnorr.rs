@@ -168,9 +168,12 @@ impl SchnorrProof {
         r_bytes.copy_from_slice(&bytes[32..]);
 
         let commitment = Point::from_bytes(&c_bytes)?;
-        let response   = Scalar::from_bytes(&r_bytes)?;
+        let response = Scalar::from_bytes(&r_bytes)?;
 
-        Ok(Self { commitment, response })
+        Ok(Self {
+            commitment,
+            response,
+        })
     }
 
     /// Returns the serialized byte length (always 64).
@@ -194,7 +197,7 @@ mod tests {
         let mut rng = OsRng;
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
-        let proof  = SchnorrProof::prove(&secret, &public, b"test message", &mut rng);
+        let proof = SchnorrProof::prove(&secret, &public, b"test message", &mut rng);
         assert!(proof.verify(&public, b"test message"));
     }
 
@@ -203,18 +206,18 @@ mod tests {
         let mut rng = OsRng;
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
-        let proof  = SchnorrProof::prove(&secret, &public, b"msg1", &mut rng);
+        let proof = SchnorrProof::prove(&secret, &public, b"msg1", &mut rng);
         assert!(!proof.verify(&public, b"msg2"));
     }
 
     #[test]
     fn wrong_public_key_fails() {
         let mut rng = OsRng;
-        let secret  = Scalar::random(&mut rng);
-        let public  = &secret * &BASEPOINT;
+        let secret = Scalar::random(&mut rng);
+        let public = &secret * &BASEPOINT;
         let wrong_s = Scalar::random(&mut rng);
         let wrong_p = &wrong_s * &BASEPOINT;
-        let proof   = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
+        let proof = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
         assert!(!proof.verify(&wrong_p, b"msg"));
     }
 
@@ -223,8 +226,8 @@ mod tests {
         let mut rng = OsRng;
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
-        let proof  = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
-        let bytes  = proof.to_bytes();
+        let proof = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
+        let bytes = proof.to_bytes();
         let recovered = SchnorrProof::from_bytes(&bytes).unwrap();
         assert_eq!(proof, recovered);
     }
@@ -244,8 +247,8 @@ mod tests {
         let mut rng = OsRng;
         let secret = Scalar::random(&mut rng);
         let public = &secret * &BASEPOINT;
-        let mut proof = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
-        let delta = Scalar::random(&mut rng);
+        let mut proof: SchnorrProof = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
+        let delta: Scalar = Scalar::random(&mut rng);
         proof.response = &proof.response + &delta;
         assert!(!proof.verify(&public, b"msg"));
     }

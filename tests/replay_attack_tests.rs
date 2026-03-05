@@ -48,7 +48,9 @@ mod direct_replay {
         let (registry, _) = build_registry(&[("alice", 1)]);
         let mut auth = Authenticator::new(&registry);
 
-        let challenge = auth.issue_challenge("alice", &mut DeterministicRng::new(2)).unwrap();
+        let challenge = auth
+            .issue_challenge("alice", &mut DeterministicRng::new(2))
+            .unwrap();
         let proof = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(3)).unwrap();
 
         auth.verify(&proof, &challenge).unwrap();
@@ -58,7 +60,10 @@ mod direct_replay {
             "nonce must be removed after successful verification"
         );
         assert!(
-            matches!(auth.verify(&proof, &challenge), Err(ZkAuthError::AuthenticationFailed)),
+            matches!(
+                auth.verify(&proof, &challenge),
+                Err(ZkAuthError::AuthenticationFailed)
+            ),
             "direct replay must be rejected"
         );
     }
@@ -69,13 +74,18 @@ mod direct_replay {
         let (registry, _) = build_registry(&[("bob", 10)]);
         let mut auth = Authenticator::new(&registry);
 
-        let challenge = auth.issue_challenge("bob", &mut DeterministicRng::new(11)).unwrap();
+        let challenge = auth
+            .issue_challenge("bob", &mut DeterministicRng::new(11))
+            .unwrap();
         let proof1 = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(12)).unwrap();
         auth.verify(&proof1, &challenge).unwrap();
 
         let proof2 = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(13)).unwrap();
         assert!(
-            matches!(auth.verify(&proof2, &challenge), Err(ZkAuthError::AuthenticationFailed)),
+            matches!(
+                auth.verify(&proof2, &challenge),
+                Err(ZkAuthError::AuthenticationFailed)
+            ),
             "nonce is consumed; a new proof does not help"
         );
     }
@@ -87,12 +97,16 @@ mod direct_replay {
         let (registry, _) = build_registry(&[("carol", 20)]);
         let mut auth = Authenticator::new(&registry);
 
-        let challenge = auth.issue_challenge("carol", &mut DeterministicRng::new(22)).unwrap();
+        let challenge = auth
+            .issue_challenge("carol", &mut DeterministicRng::new(22))
+            .unwrap();
 
-        let bad_proof = AuthProof::new(&challenge, &kp_fake, &mut DeterministicRng::new(23)).unwrap();
+        let bad_proof =
+            AuthProof::new(&challenge, &kp_fake, &mut DeterministicRng::new(23)).unwrap();
         assert!(auth.verify(&bad_proof, &challenge).is_err());
 
-        let good_proof = AuthProof::new(&challenge, &kp_real, &mut DeterministicRng::new(24)).unwrap();
+        let good_proof =
+            AuthProof::new(&challenge, &kp_real, &mut DeterministicRng::new(24)).unwrap();
         let result = auth.verify(&good_proof, &challenge).unwrap();
         assert_eq!(result.username, "carol");
     }
@@ -111,11 +125,15 @@ mod cross_session_replay {
         let (registry, _) = build_registry(&[("dave", 100)]);
         let mut auth = Authenticator::new(&registry);
 
-        let challenge_a = auth.issue_challenge("dave", &mut DeterministicRng::new(101)).unwrap();
+        let challenge_a = auth
+            .issue_challenge("dave", &mut DeterministicRng::new(101))
+            .unwrap();
         let proof_a = AuthProof::new(&challenge_a, &kp, &mut DeterministicRng::new(102)).unwrap();
         auth.verify(&proof_a, &challenge_a).unwrap();
 
-        let challenge_b = auth.issue_challenge("dave", &mut DeterministicRng::new(103)).unwrap();
+        let challenge_b = auth
+            .issue_challenge("dave", &mut DeterministicRng::new(103))
+            .unwrap();
         assert!(
             matches!(
                 auth.verify(&proof_a, &challenge_b),
@@ -131,14 +149,21 @@ mod cross_session_replay {
         let (registry, _) = build_registry(&[("eve", 110)]);
         let mut auth = Authenticator::new(&registry);
 
-        let c1 = auth.issue_challenge("eve", &mut DeterministicRng::new(111)).unwrap();
-        let c2 = auth.issue_challenge("eve", &mut DeterministicRng::new(112)).unwrap();
+        let c1 = auth
+            .issue_challenge("eve", &mut DeterministicRng::new(111))
+            .unwrap();
+        let c2 = auth
+            .issue_challenge("eve", &mut DeterministicRng::new(112))
+            .unwrap();
 
         let p1 = AuthProof::new(&c1, &kp, &mut DeterministicRng::new(113)).unwrap();
         // FIX: p2 unused in original — keep it but prefix if only used for side effects
         let _p2 = AuthProof::new(&c2, &kp, &mut DeterministicRng::new(114)).unwrap();
 
-        assert!(matches!(auth.verify(&p1, &c2), Err(ZkAuthError::AuthenticationFailed)));
+        assert!(matches!(
+            auth.verify(&p1, &c2),
+            Err(ZkAuthError::AuthenticationFailed)
+        ));
         auth.verify(&p1, &c1).unwrap();
     }
 }
@@ -156,10 +181,14 @@ mod cross_user_replay {
         let (registry, _) = build_registry(&[("alice", 200), ("bob", 201)]);
         let mut auth = Authenticator::new(&registry);
 
-        let c_alice = auth.issue_challenge("alice", &mut DeterministicRng::new(202)).unwrap();
+        let c_alice = auth
+            .issue_challenge("alice", &mut DeterministicRng::new(202))
+            .unwrap();
         let p_alice = AuthProof::new(&c_alice, &kp_alice, &mut DeterministicRng::new(203)).unwrap();
 
-        let c_bob = auth.issue_challenge("bob", &mut DeterministicRng::new(204)).unwrap();
+        let c_bob = auth
+            .issue_challenge("bob", &mut DeterministicRng::new(204))
+            .unwrap();
 
         let mut forged = p_alice.clone();
         forged.username = "bob".to_string();
@@ -176,10 +205,15 @@ mod cross_user_replay {
         let (registry, _) = build_registry(&[("alice", 220)]);
         let mut auth = Authenticator::new(&registry);
 
-        let c = auth.issue_challenge("alice", &mut DeterministicRng::new(221)).unwrap();
+        let c = auth
+            .issue_challenge("alice", &mut DeterministicRng::new(221))
+            .unwrap();
         let mut p = AuthProof::new(&c, &kp_alice, &mut DeterministicRng::new(222)).unwrap();
         p.username = "mallory".to_string();
-        assert!(matches!(auth.verify(&p, &c), Err(ZkAuthError::AuthenticationFailed)));
+        assert!(matches!(
+            auth.verify(&p, &c),
+            Err(ZkAuthError::AuthenticationFailed)
+        ));
     }
 
     #[test]
@@ -188,7 +222,9 @@ mod cross_user_replay {
         let (registry, _) = build_registry(&[("alice", 210), ("bob", 211)]);
         let mut auth = Authenticator::new(&registry);
 
-        let c = auth.issue_challenge("alice", &mut DeterministicRng::new(212)).unwrap();
+        let c = auth
+            .issue_challenge("alice", &mut DeterministicRng::new(212))
+            .unwrap();
         let p = AuthProof::new(&c, &kp_alice, &mut DeterministicRng::new(213)).unwrap();
         let result = auth.verify(&p, &c).unwrap();
         assert_eq!(result.username, "alice");
@@ -212,7 +248,9 @@ mod cross_protocol_replay {
         let (registry, _) = build_registry(&[("frank", 300)]);
         let mut auth = Authenticator::new(&registry);
 
-        let challenge = auth.issue_challenge("frank", &mut DeterministicRng::new(301)).unwrap();
+        let challenge = auth
+            .issue_challenge("frank", &mut DeterministicRng::new(301))
+            .unwrap();
 
         let reg_req =
             RegistrationRequest::new("frank", &kp, &mut DeterministicRng::new(302)).unwrap();
@@ -228,7 +266,10 @@ mod cross_protocol_replay {
         };
 
         assert!(
-            matches!(auth.verify(&forged_auth, &challenge), Err(ZkAuthError::AuthenticationFailed)),
+            matches!(
+                auth.verify(&forged_auth, &challenge),
+                Err(ZkAuthError::AuthenticationFailed)
+            ),
             "registration proof must not authenticate"
         );
     }
@@ -242,7 +283,9 @@ mod cross_protocol_replay {
         let (registry, _) = build_registry(&[("grace", 310)]);
         let mut auth = Authenticator::new(&registry);
 
-        let challenge = auth.issue_challenge("grace", &mut DeterministicRng::new(311)).unwrap();
+        let challenge = auth
+            .issue_challenge("grace", &mut DeterministicRng::new(311))
+            .unwrap();
         let auth_proof = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(312)).unwrap();
 
         // FIX: auth_proof.proof is AuthenticationProof; RegistrationRequest.proof
@@ -280,10 +323,14 @@ mod forged_nonce {
             username: "henry".to_string(),
             nonce: [0xDE; 32],
         };
-        let proof = AuthProof::new(&forged_challenge, &kp, &mut DeterministicRng::new(401)).unwrap();
+        let proof =
+            AuthProof::new(&forged_challenge, &kp, &mut DeterministicRng::new(401)).unwrap();
 
         assert!(
-            matches!(auth.verify(&proof, &forged_challenge), Err(ZkAuthError::AuthenticationFailed)),
+            matches!(
+                auth.verify(&proof, &forged_challenge),
+                Err(ZkAuthError::AuthenticationFailed)
+            ),
             "challenge with forged nonce must be rejected"
         );
     }
@@ -294,7 +341,9 @@ mod forged_nonce {
         let (registry, _) = build_registry(&[("ivan", 410)]);
         let mut auth = Authenticator::new(&registry);
 
-        let mut challenge = auth.issue_challenge("ivan", &mut DeterministicRng::new(411)).unwrap();
+        let mut challenge = auth
+            .issue_challenge("ivan", &mut DeterministicRng::new(411))
+            .unwrap();
         let proof = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(412)).unwrap();
         challenge.nonce[0] ^= 0x01;
 
@@ -310,7 +359,10 @@ mod forged_nonce {
         let (registry, _) = build_registry(&[("judy", 420)]);
         let mut auth = Authenticator::new(&registry);
 
-        let forged = AuthChallenge { username: "judy".to_string(), nonce: [0u8; 32] };
+        let forged = AuthChallenge {
+            username: "judy".to_string(),
+            nonce: [0u8; 32],
+        };
         let proof = AuthProof::new(&forged, &kp, &mut DeterministicRng::new(421)).unwrap();
 
         assert!(matches!(
@@ -340,7 +392,9 @@ mod precomputed_proof {
         let precomputed =
             AuthProof::new(&guessed_challenge, &kp, &mut DeterministicRng::new(501)).unwrap();
 
-        let real_challenge = auth.issue_challenge("karen", &mut DeterministicRng::new(502)).unwrap();
+        let real_challenge = auth
+            .issue_challenge("karen", &mut DeterministicRng::new(502))
+            .unwrap();
 
         assert!(matches!(
             auth.verify(&precomputed, &real_challenge),
@@ -362,8 +416,12 @@ mod concurrent_sessions {
         let (registry, _) = build_registry(&[("leo", 600)]);
         let mut auth = Authenticator::new(&registry);
 
-        let c1 = auth.issue_challenge("leo", &mut DeterministicRng::new(601)).unwrap();
-        let c2 = auth.issue_challenge("leo", &mut DeterministicRng::new(602)).unwrap();
+        let c1 = auth
+            .issue_challenge("leo", &mut DeterministicRng::new(601))
+            .unwrap();
+        let c2 = auth
+            .issue_challenge("leo", &mut DeterministicRng::new(602))
+            .unwrap();
         assert_ne!(c1.nonce, c2.nonce);
 
         let p2 = AuthProof::new(&c2, &kp, &mut DeterministicRng::new(603)).unwrap();
@@ -381,8 +439,12 @@ mod concurrent_sessions {
         let (registry, _) = build_registry(&[("mia", 610)]);
         let mut auth = Authenticator::new(&registry);
 
-        let c1 = auth.issue_challenge("mia", &mut DeterministicRng::new(611)).unwrap();
-        let c2 = auth.issue_challenge("mia", &mut DeterministicRng::new(612)).unwrap();
+        let c1 = auth
+            .issue_challenge("mia", &mut DeterministicRng::new(611))
+            .unwrap();
+        let c2 = auth
+            .issue_challenge("mia", &mut DeterministicRng::new(612))
+            .unwrap();
 
         let p1 = AuthProof::new(&c1, &kp, &mut DeterministicRng::new(613)).unwrap();
         let p2 = AuthProof::new(&c2, &kp, &mut DeterministicRng::new(614)).unwrap();

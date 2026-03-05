@@ -17,8 +17,8 @@
 //! ⚠️ Always use `hash_to_scalar` for challenge derivation.
 //! Do NOT manually convert raw hash bytes into scalars.
 
-use sha2::{Digest as Sha2Digest, Sha256};
 use sha2::Sha512;
+use sha2::{Digest as Sha2Digest, Sha256};
 
 use curve25519_dalek::scalar::Scalar as DalekScalar;
 
@@ -114,18 +114,18 @@ mod tests {
 
     #[test]
     fn hash_bytes_empty_input() {
-        let expected = hex::decode(
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        ).unwrap();
+        let expected =
+            hex::decode("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+                .unwrap();
         let digest = hash_bytes(b"");
         assert_eq!(&digest[..], &expected[..]);
     }
 
     #[test]
     fn hash_bytes_abc() {
-        let expected = hex::decode(
-            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-        ).unwrap();
+        let expected =
+            hex::decode("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+                .unwrap();
         let digest = hash_bytes(b"abc");
         assert_eq!(&digest[..], &expected[..]);
     }

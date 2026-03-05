@@ -297,7 +297,10 @@ mod hash_to_scalar_tests {
 
     #[test]
     fn is_deterministic() {
-        assert_eq!(hash_to_scalar(b"deterministic"), hash_to_scalar(b"deterministic"));
+        assert_eq!(
+            hash_to_scalar(b"deterministic"),
+            hash_to_scalar(b"deterministic")
+        );
     }
 
     #[test]
@@ -428,7 +431,10 @@ mod schnorr {
         let secret = Scalar::random(&mut DeterministicRng::new(secret_seed));
         let public = &secret * &BASEPOINT;
         let proof = SchnorrProof::prove(
-            &secret, &public, msg, &mut DeterministicRng::new(nonce_seed),
+            &secret,
+            &public,
+            msg,
+            &mut DeterministicRng::new(nonce_seed),
         );
         (secret, public, proof)
     }
@@ -541,7 +547,12 @@ mod proof_newtypes {
     fn make_schnorr(seed: u64) -> SchnorrProof {
         let secret = Scalar::random(&mut DeterministicRng::new(seed));
         let public = &secret * &BASEPOINT;
-        SchnorrProof::prove(&secret, &public, b"test", &mut DeterministicRng::new(seed + 1))
+        SchnorrProof::prove(
+            &secret,
+            &public,
+            b"test",
+            &mut DeterministicRng::new(seed + 1),
+        )
     }
 
     #[test]

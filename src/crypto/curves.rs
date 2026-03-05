@@ -23,10 +23,7 @@ use crate::errors::{Result, ZkAuthError};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(transparent)]
-pub struct Scalar(
-    #[serde(with = "scalar_serde")]
-    pub(crate) DalekScalar,
-);
+pub struct Scalar(#[serde(with = "scalar_serde")] pub(crate) DalekScalar);
 
 impl Scalar {
     pub fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
@@ -128,19 +125,14 @@ mod scalar_serde {
     use super::*;
     use serde::{Deserializer, Serializer};
 
-    pub fn serialize<S>(
-        scalar: &DalekScalar,
-        ser: S,
-    ) -> std::result::Result<S::Ok, S::Error>
+    pub fn serialize<S>(scalar: &DalekScalar, ser: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         ser.serialize_bytes(&scalar.to_bytes())
     }
 
-    pub fn deserialize<'de, D>(
-        de: D,
-    ) -> std::result::Result<DalekScalar, D::Error>
+    pub fn deserialize<'de, D>(de: D) -> std::result::Result<DalekScalar, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -167,10 +159,7 @@ mod scalar_serde {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Point(
-    #[serde(with = "point_serde")]
-    pub(crate) RistrettoPoint,
-);
+pub struct Point(#[serde(with = "point_serde")] pub(crate) RistrettoPoint);
 
 impl Point {
     pub fn from_bytes(bytes: &[u8; POINT_BYTE_LEN]) -> Result<Self> {
@@ -248,19 +237,14 @@ mod point_serde {
     use super::*;
     use serde::{Deserializer, Serializer};
 
-    pub fn serialize<S>(
-        point: &RistrettoPoint,
-        ser: S,
-    ) -> std::result::Result<S::Ok, S::Error>
+    pub fn serialize<S>(point: &RistrettoPoint, ser: S) -> std::result::Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         ser.serialize_bytes(&point.compress().to_bytes())
     }
 
-    pub fn deserialize<'de, D>(
-        de: D,
-    ) -> std::result::Result<RistrettoPoint, D::Error>
+    pub fn deserialize<'de, D>(de: D) -> std::result::Result<RistrettoPoint, D::Error>
     where
         D: Deserializer<'de>,
     {

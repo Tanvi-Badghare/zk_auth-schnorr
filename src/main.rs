@@ -30,8 +30,8 @@ fn main() {
 
     println!("Registering user 'alice'...");
 
-    let req = RegistrationRequest::new("alice", &keypair, &mut rng)
-        .expect("registration request failed");
+    let req =
+        RegistrationRequest::new("alice", &keypair, &mut rng).expect("registration request failed");
 
     let mut registry = Registry::new();
     registry.register(req).expect("registration failed");
@@ -48,8 +48,7 @@ fn main() {
         .issue_challenge("alice", &mut rng)
         .expect("challenge issuance failed");
 
-    let proof = AuthProof::new(&challenge, &keypair, &mut rng)
-        .expect("proof generation failed");
+    let proof = AuthProof::new(&challenge, &keypair, &mut rng).expect("proof generation failed");
 
     let result = auth
         .verify(&proof, &challenge)

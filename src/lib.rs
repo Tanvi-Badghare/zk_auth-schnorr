@@ -13,12 +13,12 @@
 // Public modules
 // ---------------------------------------------------------------------------
 
-pub mod errors;
+pub mod auth;
 pub mod config;
 pub mod crypto;
+pub mod errors;
 pub mod models;
 pub mod protocol;
-pub mod auth;
 
 // ---------------------------------------------------------------------------
 // Test utilities

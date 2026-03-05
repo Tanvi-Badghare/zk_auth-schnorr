@@ -31,9 +31,9 @@
 //! - Fiat–Shamir transform
 
 pub mod curves;
+pub mod fiat_shamir;
 pub mod hash;
 pub mod schnorr;
-pub mod fiat_shamir;
 
 // Public re-exports (clean external API)
 pub use curves::{Point, Scalar, BASEPOINT};
