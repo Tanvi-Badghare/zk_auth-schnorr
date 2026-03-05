@@ -83,8 +83,7 @@ pub struct Registry {
 }
 
 impl Registry {
-    // FIX: tests call Registry::new() but Registry only derived Default.
-    // Adding new() as a convenience constructor that delegates to Default.
+    // FIX: tests call Registry::new() — add convenience constructor.
     pub fn new() -> Self {
         Self::default()
     }
@@ -107,5 +106,15 @@ impl Registry {
 
     pub fn lookup(&self, username: &str) -> Option<&RegistrationRecord> {
         self.records.get(username)
+    }
+
+    // FIX: integration_tests.rs calls registry.len() — add delegation to HashMap.
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    // FIX: integration_tests.rs calls registry.is_empty() — add delegation.
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
     }
 }
