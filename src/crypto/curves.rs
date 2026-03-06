@@ -52,7 +52,6 @@ impl Scalar {
     }
 
     /// Access underlying dalek scalar.
-    /// Used primarily by integration tests.
     #[allow(dead_code)]
     pub fn inner(&self) -> &DalekScalar {
         &self.0
@@ -75,50 +74,37 @@ impl Scalar {
 
 impl Add for &Scalar {
     type Output = Scalar;
-
-    fn add(self, rhs: Self) -> Scalar {
-        Scalar(self.0 + rhs.0)
-    }
+    fn add(self, rhs: Self) -> Scalar { Scalar(self.0 + rhs.0) }
 }
 
 impl AddAssign for Scalar {
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
-    }
+    fn add_assign(&mut self, rhs: Self) { self.0 += rhs.0; }
 }
 
 impl Sub for &Scalar {
     type Output = Scalar;
-
-    fn sub(self, rhs: Self) -> Scalar {
-        Scalar(self.0 - rhs.0)
-    }
+    fn sub(self, rhs: Self) -> Scalar { Scalar(self.0 - rhs.0) }
 }
 
 impl SubAssign for Scalar {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.0 -= rhs.0;
-    }
+    fn sub_assign(&mut self, rhs: Self) { self.0 -= rhs.0; }
 }
 
 impl Mul for &Scalar {
     type Output = Scalar;
-
-    fn mul(self, rhs: Self) -> Scalar {
-        Scalar(self.0 * rhs.0)
-    }
+    fn mul(self, rhs: Self) -> Scalar { Scalar(self.0 * rhs.0) }
 }
 
 impl Neg for &Scalar {
     type Output = Scalar;
-
-    fn neg(self) -> Scalar {
-        Scalar(-self.0)
-    }
+    fn neg(self) -> Scalar { Scalar(-self.0) }
 }
 
 //
 // --- Scalar serde helper
+// FIX: serialize_bytes produces a JSON integer array that cannot be
+// deserialized back as &[u8]. Use hex strings instead — they round-trip
+// correctly with serde_json and all other formats.
 //
 
 mod scalar_serde {
@@ -129,25 +115,23 @@ mod scalar_serde {
     where
         S: Serializer,
     {
-        ser.serialize_bytes(&scalar.to_bytes())
+        ser.serialize_str(&hex::encode(scalar.to_bytes()))
     }
 
     pub fn deserialize<'de, D>(de: D) -> std::result::Result<DalekScalar, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let bytes: &[u8] = Deserialize::deserialize(de)?;
-
+        let s = String::deserialize(de)?;
+        let bytes = hex::decode(&s).map_err(serde::de::Error::custom)?;
         if bytes.len() != SCALAR_BYTE_LEN {
             return Err(serde::de::Error::custom("scalar must be 32 bytes"));
         }
-
         let mut arr = [0u8; SCALAR_BYTE_LEN];
-        arr.copy_from_slice(bytes);
-
+        arr.copy_from_slice(&bytes);
         DalekScalar::from_canonical_bytes(arr)
             .into_option()
-            .ok_or_else(|| serde::de::Error::custom("invalid scalar"))
+            .ok_or_else(|| serde::de::Error::custom("invalid canonical scalar"))
     }
 }
 
@@ -191,34 +175,22 @@ impl Point {
 
 impl Add for &Point {
     type Output = Point;
-
-    fn add(self, rhs: Self) -> Point {
-        Point(self.0 + rhs.0)
-    }
+    fn add(self, rhs: Self) -> Point { Point(self.0 + rhs.0) }
 }
 
 impl Sub for &Point {
     type Output = Point;
-
-    fn sub(self, rhs: Self) -> Point {
-        Point(self.0 - rhs.0)
-    }
+    fn sub(self, rhs: Self) -> Point { Point(self.0 - rhs.0) }
 }
 
 impl Neg for &Point {
     type Output = Point;
-
-    fn neg(self) -> Point {
-        Point(-self.0)
-    }
+    fn neg(self) -> Point { Point(-self.0) }
 }
 
 impl Mul<&Point> for &Scalar {
     type Output = Point;
-
-    fn mul(self, rhs: &Point) -> Point {
-        Point(self.0 * rhs.0)
-    }
+    fn mul(self, rhs: &Point) -> Point { Point(self.0 * rhs.0) }
 }
 
 impl fmt::Display for Point {
@@ -230,6 +202,7 @@ impl fmt::Display for Point {
 //
 // ---------------------------------------------------------------------------
 // point_serde
+// FIX: same as scalar_serde — use hex strings for JSON compatibility.
 // ---------------------------------------------------------------------------
 //
 
@@ -241,22 +214,20 @@ mod point_serde {
     where
         S: Serializer,
     {
-        ser.serialize_bytes(&point.compress().to_bytes())
+        ser.serialize_str(&hex::encode(point.compress().to_bytes()))
     }
 
     pub fn deserialize<'de, D>(de: D) -> std::result::Result<RistrettoPoint, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let bytes: &[u8] = Deserialize::deserialize(de)?;
-
+        let s = String::deserialize(de)?;
+        let bytes = hex::decode(&s).map_err(serde::de::Error::custom)?;
         if bytes.len() != POINT_BYTE_LEN {
             return Err(serde::de::Error::custom("point must be 32 bytes"));
         }
-
         let mut arr = [0u8; POINT_BYTE_LEN];
-        arr.copy_from_slice(bytes);
-
+        arr.copy_from_slice(&bytes);
         CompressedRistretto(arr)
             .decompress()
             .ok_or_else(|| serde::de::Error::custom("invalid Ristretto point encoding"))
