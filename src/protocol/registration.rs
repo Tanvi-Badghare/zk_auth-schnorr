@@ -28,7 +28,7 @@ pub struct RegistrationRequest {
 struct RegistrationRequestRaw {
     username: String,
     public_key: [u8; 32],
-    proof: RegistrationProof,  // SchnorrProof inside now uses [u8;32] shadow too
+    proof: RegistrationProof, // SchnorrProof inside now uses [u8;32] shadow too
 }
 
 impl Serialize for RegistrationRequest {
@@ -64,7 +64,9 @@ impl RegistrationRequest {
         let username = username.into().trim().to_string();
 
         if username.is_empty() {
-            return Err(ZkAuthError::InvalidConfig("username must not be empty".to_string()));
+            return Err(ZkAuthError::InvalidConfig(
+                "username must not be empty".to_string(),
+            ));
         }
         if username.len() > MAX_USERNAME_LEN {
             return Err(ZkAuthError::InvalidConfig("username too long".to_string()));
@@ -85,7 +87,11 @@ impl RegistrationRequest {
         );
 
         let proof = RegistrationProof::from_schnorr(schnorr);
-        Ok(Self { username, public_key, proof })
+        Ok(Self {
+            username,
+            public_key,
+            proof,
+        })
     }
 
     pub fn verify(&self) -> Result<()> {

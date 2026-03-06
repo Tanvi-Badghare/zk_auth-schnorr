@@ -74,30 +74,42 @@ impl Scalar {
 
 impl Add for &Scalar {
     type Output = Scalar;
-    fn add(self, rhs: Self) -> Scalar { Scalar(self.0 + rhs.0) }
+    fn add(self, rhs: Self) -> Scalar {
+        Scalar(self.0 + rhs.0)
+    }
 }
 
 impl AddAssign for Scalar {
-    fn add_assign(&mut self, rhs: Self) { self.0 += rhs.0; }
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
 }
 
 impl Sub for &Scalar {
     type Output = Scalar;
-    fn sub(self, rhs: Self) -> Scalar { Scalar(self.0 - rhs.0) }
+    fn sub(self, rhs: Self) -> Scalar {
+        Scalar(self.0 - rhs.0)
+    }
 }
 
 impl SubAssign for Scalar {
-    fn sub_assign(&mut self, rhs: Self) { self.0 -= rhs.0; }
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
 }
 
 impl Mul for &Scalar {
     type Output = Scalar;
-    fn mul(self, rhs: Self) -> Scalar { Scalar(self.0 * rhs.0) }
+    fn mul(self, rhs: Self) -> Scalar {
+        Scalar(self.0 * rhs.0)
+    }
 }
 
 impl Neg for &Scalar {
     type Output = Scalar;
-    fn neg(self) -> Scalar { Scalar(-self.0) }
+    fn neg(self) -> Scalar {
+        Scalar(-self.0)
+    }
 }
 
 //
@@ -175,22 +187,30 @@ impl Point {
 
 impl Add for &Point {
     type Output = Point;
-    fn add(self, rhs: Self) -> Point { Point(self.0 + rhs.0) }
+    fn add(self, rhs: Self) -> Point {
+        Point(self.0 + rhs.0)
+    }
 }
 
 impl Sub for &Point {
     type Output = Point;
-    fn sub(self, rhs: Self) -> Point { Point(self.0 - rhs.0) }
+    fn sub(self, rhs: Self) -> Point {
+        Point(self.0 - rhs.0)
+    }
 }
 
 impl Neg for &Point {
     type Output = Point;
-    fn neg(self) -> Point { Point(-self.0) }
+    fn neg(self) -> Point {
+        Point(-self.0)
+    }
 }
 
 impl Mul<&Point> for &Scalar {
     type Output = Point;
-    fn mul(self, rhs: &Point) -> Point { Point(self.0 * rhs.0) }
+    fn mul(self, rhs: &Point) -> Point {
+        Point(self.0 * rhs.0)
+    }
 }
 
 impl fmt::Display for Point {

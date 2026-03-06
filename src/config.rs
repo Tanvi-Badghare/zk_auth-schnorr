@@ -31,7 +31,9 @@ pub struct FiatShamirConfig {
 
 impl Default for FiatShamirConfig {
     fn default() -> Self {
-        Self { domain_separator: "zk-auth-v0.1".to_string() }
+        Self {
+            domain_separator: "zk-auth-v0.1".to_string(),
+        }
     }
 }
 
@@ -43,7 +45,10 @@ pub struct ProtocolConfig {
 
 impl Default for ProtocolConfig {
     fn default() -> Self {
-        Self { max_username_len: 64, nonce_byte_len: 32 }
+        Self {
+            max_username_len: 64,
+            nonce_byte_len: 32,
+        }
     }
 }
 
@@ -54,7 +59,9 @@ pub struct SecurityConfig {
 
 impl Default for SecurityConfig {
     fn default() -> Self {
-        Self { max_auth_attempts: 5 }
+        Self {
+            max_auth_attempts: 5,
+        }
     }
 }
 
@@ -109,7 +116,9 @@ impl ZkAuthConfig {
 
     pub fn with_domain(domain: &str) -> Self {
         Self {
-            fiat_shamir: FiatShamirConfig { domain_separator: domain.to_string() },
+            fiat_shamir: FiatShamirConfig {
+                domain_separator: domain.to_string(),
+            },
             ..Self::default()
         }
     }
