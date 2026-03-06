@@ -18,24 +18,30 @@
 //! This library is experimental and intended for research and learning.
 //! It has **NOT been audited** and MUST NOT be used in production systems.
 //!
-//! # Example
+//! ## Quick Example
 //!
 //! ```rust
-//! use zk_auth::models::keypair::KeyPair;
-//! use zk_auth::crypto::schnorr::Schnorr;
+//! use zk_auth::models::keypair::Keypair;
+//! use zk_auth::protocol::registration::{RegistrationRequest, Registry};
+//! use zk_auth::protocol::authentication::{AuthProof, Authenticator};
+//! use rand::rngs::OsRng;
 //!
-//! // generate keypair
-//! let keypair = KeyPair::generate();
+//! // Generate a keypair
+//! let keypair = Keypair::generate(&mut OsRng).unwrap();
 //!
-//! // create proof
-//! let proof = Schnorr::prove(&keypair);
+//! // Register
+//! let req = RegistrationRequest::new("alice", &keypair, &mut OsRng).unwrap();
+//! let mut registry = Registry::new();
+//! registry.register(req).unwrap();
 //!
-//! // verify proof
-//! let valid = Schnorr::verify(&keypair.public, &proof);
+//! // Authenticate
+//! let mut auth = Authenticator::new(&registry);
+//! let challenge = auth.issue_challenge("alice", &mut OsRng).unwrap();
+//! let proof = AuthProof::new(&challenge, &keypair, &mut OsRng).unwrap();
+//! let result = auth.verify(&proof, &challenge).unwrap();
 //!
-//! assert!(valid);
+//! assert_eq!(result.username, "alice");
 //! ```
-//!
 //! # Protocol
 //!
 //! The protocol follows the classical Schnorr identification flow:
