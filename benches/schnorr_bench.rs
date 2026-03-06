@@ -55,9 +55,7 @@ fn bench_schnorr_prove_and_verify(c: &mut Criterion) {
 }
 
 fn bench_scalar_random(c: &mut Criterion) {
-    c.bench_function("scalar_random", |b| {
-        b.iter(|| Scalar::random(&mut OsRng))
-    });
+    c.bench_function("scalar_random", |b| b.iter(|| Scalar::random(&mut OsRng)));
 }
 
 fn bench_scalar_mul_basepoint(c: &mut Criterion) {
