@@ -48,15 +48,9 @@ pub enum ZkAuthError {
     // Registration / Authentication
     // =====================================================================
 
-    // FIX: was `UserAlreadyExists` (unit variant).
-    // registration.rs calls ZkAuthError::UserAlreadyExists(request.username)
-    // which passes a String — the variant must hold String to match.
     #[error("User already registered: {0}")]
     UserAlreadyExists(String),
 
-    // FIX: was `UserNotFound` (unit variant).
-    // authentication.rs calls ZkAuthError::UserNotFound(username.into())
-    // and ZkAuthError::UserNotFound(proof.username.clone()) — both pass String.
     #[error("User not found: {0}")]
     UserNotFound(String),
 
@@ -65,12 +59,11 @@ pub enum ZkAuthError {
 
     // =====================================================================
     // Serialization
+    // FIX: removed bincode::Error (unmaintained). The library uses serde_json
+    // for all serialization — serde_json::Error covers both directions.
     // =====================================================================
-    #[error("Serialization failure")]
-    Serialization(#[from] serde_json::Error),
-
-    #[error("Deserialization failure")]
-    Deserialization(#[from] bincode::Error),
+    #[error("Serialization error")]
+    Serde(#[from] serde_json::Error),
 
     // =====================================================================
     // Configuration
