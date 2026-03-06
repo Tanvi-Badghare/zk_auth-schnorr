@@ -1,17 +1,56 @@
-//! # zkauth-rs
+//! zk_auth
 //!
-//! A research-oriented Zero-Knowledge Authentication library
-//! implementing Schnorr identification and the Fiat–Shamir transform.
+//! A research-oriented Zero-Knowledge Authentication framework
+//! implementing the Schnorr identification protocol and
+//! Fiat–Shamir signature transformation.
 //!
-//! ⚠️ Security Notice:
+//! # Overview
+//!
+//! This crate provides:
+//!
+//! - Schnorr zero-knowledge identification
+//! - Fiat–Shamir signature scheme
+//! - Ristretto255 elliptic curve abstraction
+//! - Transcript-based challenge generation
+//!
+//! ⚠️ **Security Notice**
+//!
 //! This library is experimental and intended for research and learning.
-//! It has NOT been audited and MUST NOT be used in production.
-
-#![forbid(unsafe_code)]
-
-// ---------------------------------------------------------------------------
-// Public modules
-// ---------------------------------------------------------------------------
+//! It has **NOT been audited** and MUST NOT be used in production systems.
+//!
+//! # Example
+//!
+//! ```rust
+//! use zk_auth::models::keypair::KeyPair;
+//! use zk_auth::crypto::schnorr::Schnorr;
+//!
+//! // generate keypair
+//! let keypair = KeyPair::generate();
+//!
+//! // create proof
+//! let proof = Schnorr::prove(&keypair);
+//!
+//! // verify proof
+//! let valid = Schnorr::verify(&keypair.public, &proof);
+//!
+//! assert!(valid);
+//! ```
+//!
+//! # Protocol
+//!
+//! The protocol follows the classical Schnorr identification flow:
+//!
+//! ```text
+//! Prover                Verifier
+//!   |                      |
+//!   | ---- commitment ---> |
+//!   | <---- challenge ---- |
+//!   | ---- response -----> |
+//!   |                      |
+//! ```
+//!
+//! Security relies on the hardness of the
+//! **discrete logarithm problem over Ristretto255**.
 
 pub mod auth;
 pub mod config;

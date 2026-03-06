@@ -1,1 +1,31 @@
-/target
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Criterion benchmark results
+/criterion/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Generated documentation
+/doc/
+
+# Log files
+*.log
