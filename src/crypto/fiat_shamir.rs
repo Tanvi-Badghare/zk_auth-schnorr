@@ -33,8 +33,8 @@
 //! ## Note
 //!
 //! For the basic Schnorr protocol in this library, you don't need to use
-//! [`Transcript`] directly — [`schnorr::prove`][super::schnorr::prove] and
-//! [`schnorr::verify`][super::schnorr::verify] handle the transcript internally.
+//! [`Transcript`] directly — [`SchnorrProof::prove`][super::schnorr::SchnorrProof::prove] and
+//! [`SchnorrProof::verify`][super::schnorr::SchnorrProof::verify] handle the transcript internally.
 //! This module is provided for:
 //! * Implementing more complex zero-knowledge protocols.
 //! * Educational purposes (understanding Fiat–Shamir).
