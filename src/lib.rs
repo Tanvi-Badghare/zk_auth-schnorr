@@ -1,22 +1,12 @@
-//! # zk-auth
+//! # zkauth-rs
 //!
 //! A research-oriented Zero-Knowledge Authentication library
-//! implementing Schnorr identification and Fiat–Shamir signatures.
+//! implementing Schnorr identification and the Fiat–Shamir transform.
 //!
-//! ## Module Overview
-//!
-//! - [`crypto`] — Low-level primitives: curve operations, hashing, Schnorr, Fiat–Shamir  
-//! - [`models`] — Core data types: keypairs, proofs  
-//! - [`protocol`] — Registration and authentication logic  
-//! - [`auth`] — Prover / verifier roles and full flows  
-//! - [`config`] — System-wide configuration  
-//! - [`errors`] — Unified error and `Result` types  
-//!
-//! ⚠️ **Security Notice**
+//! ⚠️ Security Notice:
 //! This library is experimental and intended for research and learning.
 //! It has NOT been audited and MUST NOT be used in production.
 
-// For a crypto project, this is a strong safety signal.
 #![forbid(unsafe_code)]
 
 // ---------------------------------------------------------------------------
