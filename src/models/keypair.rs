@@ -8,20 +8,13 @@
 //!
 //! The secret key is automatically zeroized when the [`Keypair`] is dropped
 //! via [`ZeroizeOnDrop`][zeroize::ZeroizeOnDrop].
-//! This prevents secret material from lingering in memory after use.
 //!
 //! ## Serialization
 //!
 //! ⚠️ **WARNING**: [`Keypair`] serializes **both** the public and secret keys.
-//! This is convenient for demos and tests, but **do not** store serialized
-//! keypairs in plaintext in production.  Use encrypted storage or a
-//! dedicated keystore.
+//! Do not store serialized keypairs in plaintext in production.
 
 use rand::{CryptoRng, RngCore};
-// FIX 1: was `use rand::RngCore` — CryptoRng was missing.
-// Scalar::random now requires R: RngCore + CryptoRng (dalek v4),
-// so generate() must propagate that bound to its own R parameter.
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -29,76 +22,34 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::crypto::curves::{Point, Scalar, BASEPOINT};
 use crate::errors::Result;
 
-// ---------------------------------------------------------------------------
-// Keypair
-// ---------------------------------------------------------------------------
-
-/// A public/private key pair for ZKAuth.
-///
-/// # Zeroization
-///
-/// Only `secret_key` needs zeroization — it is the only secret field.
-/// `public_key` is a public value; zeroizing it provides no security
-/// benefit and `Point` (wrapping `RistrettoPoint`) does not implement
-/// `Zeroize` because dalek deliberately omits it for public types.
-///
-/// We therefore derive `Zeroize` only on `secret_key` via
-/// `#[zeroize(skip)]` on `public_key`, and use `ZeroizeOnDrop` to
-/// trigger automatic zeroization at drop time.
-///
-/// # Clone
-///
-/// `Clone` is intentionally NOT derived.  Cloning a keypair duplicates
-/// the secret scalar in memory, which defeats zeroization.
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct Keypair {
     /// The secret scalar `x`.  Never log, print, or transmit this value.
     secret_key: Scalar,
 
     /// The public point `Y = x·G`.  Safe to share.
-    // FIX 2: Point does not implement Zeroize (RistrettoPoint is a public
-    // type and dalek omits Zeroize for it even with the "zeroize" feature).
-    // Marking it #[zeroize(skip)] tells the Zeroize derive macro to ignore
-    // this field.  The secret_key field is still zeroized on drop.
+    /// Marked skip because RistrettoPoint does not implement Zeroize —
+    /// dalek omits it for public types. Only secret_key needs zeroization.
     #[zeroize(skip)]
     public_key: Point,
 }
 
 impl Keypair {
-    /// Generate a fresh keypair using a cryptographically secure RNG.
-    ///
-    /// # Arguments
-    ///
-    /// * `rng` — Use [`OsRng`][rand::rngs::OsRng] in production.
-    ///   Use [`DeterministicRng`][crate::test_utils::DeterministicRng]
-    ///   only in tests.
-    // FIX 1 (continued): bound widened from R: RngCore to R: RngCore + CryptoRng
-    // to match the bound on Scalar::random required by dalek v4.
     pub fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self> {
         let secret_key = Scalar::random(rng);
         let public_key = &secret_key * &BASEPOINT;
-        Ok(Self {
-            secret_key,
-            public_key,
-        })
+        Ok(Self { secret_key, public_key })
     }
 
-    /// Return a reference to the public key.  Safe to share freely.
     pub fn public_key(&self) -> &Point {
         &self.public_key
     }
 
-    /// Return a reference to the secret key.
-    ///
-    /// ⚠️ **Never log, print, or transmit this value.**
+    /// ⚠️ Never log, print, or transmit this value.
     pub fn secret_key(&self) -> &Scalar {
         &self.secret_key
     }
 }
-
-// ---------------------------------------------------------------------------
-// Debug — secret key is always redacted
-// ---------------------------------------------------------------------------
 
 impl fmt::Debug for Keypair {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -109,14 +60,12 @@ impl fmt::Debug for Keypair {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::test_utils::DeterministicRng;
+    // FIX: lib.rs declares `#[cfg(test)] pub mod test_utils` at the crate root,
+    // so the correct path is crate::test_utils, not crate::tests::test_utils.
+    use crate::test_utils::DeterministicRng;
 
     #[test]
     fn generate_succeeds() {
