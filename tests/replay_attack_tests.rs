@@ -26,7 +26,6 @@ fn register(registry: &mut Registry, username: &str, kp: &Keypair, seed: u64) {
 fn build_registry(users: &[(&str, u64)]) -> (Registry, Vec<Keypair>) {
     let mut registry = Registry::new();
     let mut keypairs = Vec::new();
-    // FIX: `i` unused — replaced enumerate with direct iteration
     for (name, seed) in users.iter() {
         let kp = gen_keypair(*seed);
         register(&mut registry, name, &kp, seed + 100);
@@ -53,13 +52,16 @@ mod direct_replay {
             .unwrap();
         let proof = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(3)).unwrap();
 
+        assert!(
+            !auth.is_consumed(&challenge.nonce),
+            "nonce must not be consumed before a successful verification"
+        );
+
         auth.verify(&proof, &challenge).unwrap();
 
-        // FIX: pending_nonces is the consumed set — after verify the nonce is inserted,
-        // so contains() must be true, not false.
         assert!(
-            auth.pending_nonces.contains(&challenge.nonce),
-            "nonce must be present in consumed set after successful verification"
+            auth.is_consumed(&challenge.nonce),
+            "nonce must be marked consumed after successful verification"
         );
         assert!(
             matches!(
@@ -106,6 +108,10 @@ mod direct_replay {
         let bad_proof =
             AuthProof::new(&challenge, &kp_fake, &mut DeterministicRng::new(23)).unwrap();
         assert!(auth.verify(&bad_proof, &challenge).is_err());
+        assert!(
+            !auth.is_consumed(&challenge.nonce),
+            "a failed attempt must not burn the nonce"
+        );
 
         let good_proof =
             AuthProof::new(&challenge, &kp_real, &mut DeterministicRng::new(24)).unwrap();
@@ -159,8 +165,6 @@ mod cross_session_replay {
             .unwrap();
 
         let p1 = AuthProof::new(&c1, &kp, &mut DeterministicRng::new(113)).unwrap();
-        // FIX: p2 unused in original — keep it but prefix if only used for side effects
-        let _p2 = AuthProof::new(&c2, &kp, &mut DeterministicRng::new(114)).unwrap();
 
         assert!(matches!(
             auth.verify(&p1, &c2),
@@ -212,8 +216,7 @@ mod cross_user_replay {
             .unwrap();
         let mut p = AuthProof::new(&c, &kp_alice, &mut DeterministicRng::new(222)).unwrap();
         p.username = "mallory".to_string();
-        // FIX: "mallory" is not registered so verify returns UserNotFound,
-        // not AuthenticationFailed. Accept any Err.
+        // "mallory" is not registered, so any error is acceptable here.
         assert!(auth.verify(&p, &c).is_err());
     }
 
@@ -238,11 +241,11 @@ mod cross_user_replay {
 
 mod cross_protocol_replay {
     use super::*;
+    use zk_auth::models::proof::{AuthenticationProof, RegistrationProof};
 
     /// A registration proof cannot be reused as an authentication proof.
-    // FIX: original used reg_req.proof (RegistrationProof) where AuthProof.proof
-    // expects AuthenticationProof. Use AuthenticationProof::from_schnorr with
-    // the inner SchnorrProof extracted from the RegistrationProof.
+    /// The inner Schnorr proof is re-wrapped to get past the type system;
+    /// the domain-separated binding must make verification fail.
     #[test]
     fn registration_proof_rejected_during_authentication() {
         let kp = gen_keypair(300);
@@ -256,14 +259,9 @@ mod cross_protocol_replay {
         let reg_req =
             RegistrationRequest::new("frank", &kp, &mut DeterministicRng::new(302)).unwrap();
 
-        // FIX: reg_req.proof is RegistrationProof; AuthProof.proof needs AuthenticationProof.
-        // Extract the inner SchnorrProof and re-wrap as AuthenticationProof.
-        use zk_auth::models::proof::AuthenticationProof;
-        let auth_proof_field = AuthenticationProof::from_schnorr(reg_req.proof.inner().clone());
-
         let forged_auth = AuthProof {
             username: "frank".to_string(),
-            proof: auth_proof_field,
+            proof: AuthenticationProof::from_schnorr(reg_req.proof.inner().clone()),
         };
 
         assert!(
@@ -275,9 +273,7 @@ mod cross_protocol_replay {
         );
     }
 
-    /// An authentication proof cannot be used to re-register.
-    // FIX: original used auth_proof.proof (AuthenticationProof) where
-    // RegistrationRequest.proof expects RegistrationProof.
+    /// An authentication proof cannot be used to register.
     #[test]
     fn authentication_proof_rejected_during_registration() {
         let kp = gen_keypair(310);
@@ -289,15 +285,10 @@ mod cross_protocol_replay {
             .unwrap();
         let auth_proof = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(312)).unwrap();
 
-        // FIX: auth_proof.proof is AuthenticationProof; RegistrationRequest.proof
-        // needs RegistrationProof. Re-wrap the inner SchnorrProof.
-        use zk_auth::models::proof::RegistrationProof;
-        let reg_proof_field = RegistrationProof::from_schnorr(auth_proof.proof.inner().clone());
-
         let forged_reg = RegistrationRequest {
             username: "grace".to_string(),
             public_key: kp.public_key().clone(),
-            proof: reg_proof_field,
+            proof: RegistrationProof::from_schnorr(auth_proof.proof.inner().clone()),
         };
 
         assert!(
@@ -486,11 +477,13 @@ mod concurrent_sessions {
 }
 
 // ============================================================================
-// 8. Registration replay
+// 8. Registration replay and invalid keys
 // ============================================================================
 
 mod registration_replay {
     use super::*;
+    use zk_auth::crypto::{Point, Scalar, SchnorrProof};
+    use zk_auth::models::proof::RegistrationProof;
 
     #[test]
     fn registration_request_cannot_be_replayed() {
@@ -498,7 +491,6 @@ mod registration_replay {
         let mut registry = Registry::new();
         let req = RegistrationRequest::new("quinn", &kp, &mut DeterministicRng::new(901)).unwrap();
         registry.register(req.clone()).unwrap();
-        // FIX: UserAlreadyExists now holds String — use (_) pattern
         assert!(matches!(
             registry.register(req),
             Err(ZkAuthError::UserAlreadyExists(_))
@@ -513,10 +505,29 @@ mod registration_replay {
         let req1 = RegistrationRequest::new("rose", &kp1, &mut DeterministicRng::new(912)).unwrap();
         let req2 = RegistrationRequest::new("rose", &kp2, &mut DeterministicRng::new(913)).unwrap();
         registry.register(req1).unwrap();
-        // FIX: UserAlreadyExists now holds String — use (_) pattern
         assert!(matches!(
             registry.register(req2),
             Err(ZkAuthError::UserAlreadyExists(_))
         ));
+    }
+
+    /// With Y = identity the Schnorr equation degenerates, so anyone could
+    /// register it and then log in as that user. It must be rejected outright.
+    #[test]
+    fn identity_public_key_cannot_be_registered() {
+        let mut registry = Registry::new();
+        let req = RegistrationRequest {
+            username: "mallory".to_string(),
+            public_key: Point::identity(),
+            proof: RegistrationProof::from_schnorr(SchnorrProof {
+                commitment: Point::identity(),
+                response: Scalar::zero(),
+            }),
+        };
+        assert!(matches!(
+            registry.register(req),
+            Err(ZkAuthError::InvalidPoint)
+        ));
+        assert!(registry.is_empty());
     }
 }

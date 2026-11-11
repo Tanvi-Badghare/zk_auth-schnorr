@@ -1,7 +1,7 @@
 //! zk-auth demo binary
 //!
-//! Demonstrates the Schnorr Identification Protocol and
-//! Fiat–Shamir Signature Scheme implemented in this library.
+//! Demonstrates the Schnorr identification protocol made non-interactive
+//! with Fiat-Shamir, plus single-use-nonce replay rejection.
 
 use rand::rngs::OsRng;
 
@@ -15,18 +15,18 @@ use zk_auth::{
 
 fn main() {
     println!("----------------------------------------");
-    println!("zk-auth demo: Schnorr + Fiat–Shamir");
+    println!("zk-auth demo: Schnorr + Fiat-Shamir");
     println!("----------------------------------------\n");
 
     let mut rng = OsRng;
 
-    // ── Key generation ───────────────────────────────────────────────────────
+    // -- Key generation ------------------------------------------------------
 
     let keypair = Keypair::generate(&mut rng).expect("keypair generation failed");
     println!("Keypair generated.");
     println!("Public key: {}\n", keypair.public_key());
 
-    // ── Registration ─────────────────────────────────────────────────────────
+    // -- Registration --------------------------------------------------------
 
     println!("Registering user 'alice'...");
 
@@ -38,7 +38,7 @@ fn main() {
 
     println!("Registration successful.\n");
 
-    // ── Authentication ───────────────────────────────────────────────────────
+    // -- Authentication ------------------------------------------------------
 
     println!("Authenticating 'alice'...");
 
@@ -56,6 +56,15 @@ fn main() {
 
     println!("Authentication successful.");
     println!("Username:      {}", result.username);
-    println!("Session token: {}", hex::encode(&result.session_token));
+    println!("Session token: {}\n", hex::encode(&result.session_token));
+
+    // -- Replay --------------------------------------------------------------
+
+    println!("Replaying the same proof...");
+    match auth.verify(&proof, &challenge) {
+        Ok(_) => println!("UNEXPECTED: replay was accepted!"),
+        Err(e) => println!("Replay rejected: {e}"),
+    }
+
     println!("\nDemo completed successfully.");
 }
