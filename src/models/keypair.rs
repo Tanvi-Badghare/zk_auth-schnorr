@@ -15,11 +15,7 @@ pub struct Keypair {
     public_key: Point,
 }
 
-// FIX: do not use Scalar/Point's serde impls — they call serialize_bytes which
-// JSON round-trips as a sequence of integers, but the deserializer expects
-// a borrowed byte slice.  Instead, serialize via a shadow struct that stores
-// raw [u8; 32] arrays, which JSON handles as integer sequences that we can
-// read back the same way.
+/// Serialized form: raw canonical bytes for both keys.
 #[derive(Serialize, Deserialize)]
 struct KeypairRaw {
     secret_key: [u8; 32],
@@ -43,6 +39,14 @@ impl<'de> Deserialize<'de> for Keypair {
             .map_err(|e| serde::de::Error::custom(format!("invalid secret key: {e}")))?;
         let public_key = Point::from_bytes(&raw.public_key)
             .map_err(|e| serde::de::Error::custom(format!("invalid public key: {e}")))?;
+
+        // The pair must be consistent, and the identity is never a valid key.
+        if public_key.is_identity() || public_key != &secret_key * &BASEPOINT {
+            return Err(serde::de::Error::custom(
+                "public key does not match secret key",
+            ));
+        }
+
         Ok(Self {
             secret_key,
             public_key,
@@ -117,5 +121,17 @@ mod tests {
         let recovered: Keypair = serde_json::from_str(&json).unwrap();
         assert_eq!(kp.public_key(), recovered.public_key());
         assert_eq!(kp.secret_key(), recovered.secret_key());
+    }
+
+    #[test]
+    fn deserialize_rejects_mismatched_public_key() {
+        let kp1 = Keypair::generate(&mut DeterministicRng::new(40)).unwrap();
+        let kp2 = Keypair::generate(&mut DeterministicRng::new(41)).unwrap();
+        let json = serde_json::to_string(&KeypairRaw {
+            secret_key: kp1.secret_key().to_bytes(),
+            public_key: kp2.public_key().to_bytes(),
+        })
+        .unwrap();
+        assert!(serde_json::from_str::<Keypair>(&json).is_err());
     }
 }

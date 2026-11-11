@@ -8,7 +8,9 @@ use crate::errors::Result;
 
 /// Proof created during user registration.
 ///
-/// Internally a Schnorr proof with domain `"registration"`.
+/// A Schnorr proof over a binding message derived from the registration
+/// domain (`"zkauth-registration-v1"`), the username and the public key.
+/// The newtype keeps it type-distinct from [`AuthenticationProof`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegistrationProof(pub(crate) SchnorrProof);
 
@@ -25,15 +27,11 @@ impl RegistrationProof {
         self.0.serialized_size()
     }
 
-    // FIX: was pub(crate) — tests/ compiles as a separate crate and cannot
-    // see pub(crate) items. Changed to pub so unit_tests.rs can call
-    // proof.inner().commitment for the type-distinction assertion.
+    // pub (not pub(crate)) because tests/ compiles as a separate crate.
     pub fn inner(&self) -> &SchnorrProof {
         &self.0
     }
 
-    // FIX: was pub(crate) — same reason. unit_tests.rs calls
-    // RegistrationProof::from_schnorr(...) directly in proof_newtypes tests.
     pub fn from_schnorr(proof: SchnorrProof) -> Self {
         Self(proof)
     }
@@ -41,7 +39,9 @@ impl RegistrationProof {
 
 /// Proof created during authentication.
 ///
-/// Internally a Schnorr proof with domain `"authentication"`.
+/// A Schnorr proof over a binding message derived from the authentication
+/// domain (`"zkauth-authentication-v1"`), the username, the public key and the
+/// server-issued single-use nonce.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticationProof(pub(crate) SchnorrProof);
 
@@ -58,12 +58,10 @@ impl AuthenticationProof {
         self.0.serialized_size()
     }
 
-    // FIX: was pub(crate) — same as RegistrationProof above.
     pub fn inner(&self) -> &SchnorrProof {
         &self.0
     }
 
-    // FIX: was pub(crate) — same as RegistrationProof above.
     pub fn from_schnorr(proof: SchnorrProof) -> Self {
         Self(proof)
     }
