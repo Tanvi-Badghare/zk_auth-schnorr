@@ -1,7 +1,7 @@
 //! Cryptographic hashing primitives.
 //!
 //! This module wraps SHA-256 (via the `sha2` crate) behind a simple,
-//! consistent API.  The primary use case is Fiat–Shamir transcript
+//! consistent API. The primary use case is Fiat–Shamir transcript
 //! hashing, where multiple messages are fed into a single digest.
 //!
 //! ## API
@@ -11,24 +11,15 @@
 //! * **Incremental (transcript) hashing**: [`Hasher`] lets you call
 //!   [`update`][Hasher::update] multiple times before calling
 //!   [`finalize`][Hasher::finalize].
+//! * **Hash → Scalar**: [`hash_to_scalar`] securely derives a curve
+//!   scalar for Schnorr / Fiat–Shamir challenges.
 //!
-//! ## Example
-//! ```rust
-//! use zk_auth::crypto::hash::{hash_bytes, Hasher};
-//!
-//! // One-shot
-//! let digest = hash_bytes(b"hello");
-//! assert_eq!(digest.len(), 32);
-//!
-//! // Incremental
-//! let mut hasher = Hasher::new();
-//! hasher.update(b"hello");
-//! hasher.update(b" ");
-//! hasher.update(b"world");
-//! let digest = hasher.finalize();
-//! ```
+//! ⚠️  Always use `hash_to_scalar` for challenge derivation.
+//! Do NOT manually convert raw hash bytes into scalars.
 
 use sha2::{Digest as Sha2Digest, Sha256};
+use sha2::Sha512;
+use curve25519_dalek::scalar::Scalar;
 use crate::config::HASH_BYTE_LEN;
 
 // ---------------------------------------------------------------------------
@@ -46,23 +37,7 @@ pub type Digest = [u8; HASH_BYTE_LEN];
 ///
 /// Call [`update`][Self::update] zero or more times to feed in data,
 /// then call [`finalize`][Self::finalize] to produce the digest.
-/// The hasher is consumed by `finalize` (this matches the `sha2` API
-/// and prevents accidental reuse of a finalised state).
-///
-/// [`Hasher`] implements [`Clone`], so you can fork a transcript:
-/// ```rust
-/// # use zk_auth::crypto::hash::Hasher;
-/// let mut h1 = Hasher::new();
-/// h1.update(b"prefix");
-///
-/// let mut h2 = h1.clone();
-/// h1.update(b"branch_a");
-/// h2.update(b"branch_b");
-///
-/// // h1 and h2 now have different internal states.
-/// # let _d1 = h1.finalize();
-/// # let _d2 = h2.finalize();
-/// ```
+/// The hasher is consumed by `finalize`.
 #[derive(Clone)]
 pub struct Hasher {
     inner: Sha256,
@@ -76,21 +51,15 @@ impl Hasher {
         }
     }
 
-    /// Feed `data` into the hash.  Can be called multiple times; the
-    /// order of calls matters (this is not a commutative hash).
+    /// Feed `data` into the hash.
+    /// Order matters.
     pub fn update(&mut self, data: &[u8]) {
         self.inner.update(data);
     }
 
     /// Consume the hasher and produce the final 32-byte digest.
-    ///
-    /// After calling this, the hasher is gone (it moves `self`).
-    /// If you need to continue hashing, [`clone`][Self::clone] the
-    /// hasher *before* calling `finalize`.
     pub fn finalize(self) -> Digest {
         let output = self.inner.finalize();
-        // sha2::Digest::finalize() returns GenericArray<u8, U32>.
-        // We convert it to a plain [u8; 32].
         let mut digest = [0u8; HASH_BYTE_LEN];
         digest.copy_from_slice(&output);
         digest
@@ -108,20 +77,34 @@ impl Default for Hasher {
 // ---------------------------------------------------------------------------
 
 /// Hash a single byte slice and return the 32-byte SHA-256 digest.
-///
-/// This is a convenience wrapper around [`Hasher`] for cases where you
-/// have all the data up-front.  Equivalent to:
-/// ```rust
-/// # use zk_auth::crypto::hash::Hasher;
-/// # let data = b"example";
-/// let mut hasher = Hasher::new();
-/// hasher.update(data);
-/// let digest = hasher.finalize();
-/// ```
 pub fn hash_bytes(data: &[u8]) -> Digest {
     let mut hasher = Hasher::new();
     hasher.update(data);
     hasher.finalize()
+}
+
+// ---------------------------------------------------------------------------
+// Hash → Scalar (for Fiat–Shamir challenges)
+// ---------------------------------------------------------------------------
+
+/// Hash arbitrary data into a curve scalar (mod group order).
+///
+/// Uses SHA-512 internally and reduces modulo the curve order
+/// via `from_bytes_mod_order_wide`, ensuring uniform distribution.
+///
+/// ⚠️ Do NOT manually convert 32-byte hashes into scalars.
+/// Always use this function for Schnorr challenges.
+pub fn hash_to_scalar(data: &[u8]) -> Scalar {
+    use sha2::Digest;
+
+    let mut hasher = Sha512::new();
+    hasher.update(data);
+    let wide_hash = hasher.finalize(); // 64 bytes
+
+    let mut wide_bytes = [0u8; 64];
+    wide_bytes.copy_from_slice(&wide_hash);
+
+    Scalar::from_bytes_mod_order_wide(&wide_bytes)
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +114,12 @@ pub fn hash_bytes(data: &[u8]) -> Digest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hex;
 
-    // --- Known test vectors for SHA-256 -----------------------------------
+    // --- Known SHA-256 test vectors ---------------------------------------
 
     #[test]
     fn hash_bytes_empty_input() {
-        // SHA-256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
         let expected = hex::decode(
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         ).unwrap();
@@ -146,7 +129,6 @@ mod tests {
 
     #[test]
     fn hash_bytes_abc() {
-        // SHA-256("abc") = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
         let expected = hex::decode(
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         ).unwrap();
@@ -156,8 +138,6 @@ mod tests {
 
     #[test]
     fn hash_bytes_long_input() {
-        // SHA-256("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq")
-        // = 248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1
         let input = b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
         let expected = hex::decode(
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
@@ -166,21 +146,18 @@ mod tests {
         assert_eq!(&digest[..], &expected[..]);
     }
 
-    // --- Incremental (Hasher) tests ---------------------------------------
+    // --- Incremental hashing tests ----------------------------------------
 
     #[test]
     fn hasher_multiple_updates_same_as_concatenated() {
-        // Hashing "abc" in one shot should equal hashing "a", "b", "c"
-        // separately.
         let one_shot = hash_bytes(b"abc");
 
         let mut incremental = Hasher::new();
         incremental.update(b"a");
         incremental.update(b"b");
         incremental.update(b"c");
-        let incremental_digest = incremental.finalize();
 
-        assert_eq!(one_shot, incremental_digest);
+        assert_eq!(one_shot, incremental.finalize());
     }
 
     #[test]
@@ -190,7 +167,6 @@ mod tests {
 
         let mut h2 = h1.clone();
 
-        // Both add the same suffix
         h1.update(b"suffix");
         h2.update(b"suffix");
 
@@ -214,9 +190,7 @@ mod tests {
     fn hasher_empty_finalize() {
         let hasher = Hasher::new();
         let digest = hasher.finalize();
-        // Should match SHA-256 of empty string
-        let expected = hash_bytes(b"");
-        assert_eq!(digest, expected);
+        assert_eq!(digest, hash_bytes(b""));
     }
 
     #[test]
@@ -224,5 +198,27 @@ mod tests {
         let h1 = Hasher::default();
         let h2 = Hasher::new();
         assert_eq!(h1.finalize(), h2.finalize());
+    }
+
+    // --- Hash → Scalar tests ----------------------------------------------
+
+    #[test]
+    fn hash_to_scalar_is_deterministic() {
+        let s1 = hash_to_scalar(b"challenge");
+        let s2 = hash_to_scalar(b"challenge");
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn hash_to_scalar_differs_for_different_inputs() {
+        let s1 = hash_to_scalar(b"A");
+        let s2 = hash_to_scalar(b"B");
+        assert_ne!(s1, s2);
+    }
+
+    #[test]
+    fn hash_to_scalar_not_zero_for_typical_input() {
+        let s = hash_to_scalar(b"nontrivial input");
+        assert_ne!(s, Scalar::ZERO);
     }
 }
