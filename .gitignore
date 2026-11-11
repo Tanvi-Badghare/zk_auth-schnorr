@@ -1,6 +1,5 @@
 # Rust build artifacts
 /target/
-Cargo.lock
 
 # Criterion benchmark results
 /criterion/
@@ -24,8 +23,5 @@ desktop.ini
 *.pem
 *.key
 
-# Generated documentation
-/doc/
-
-# Log files
+# Logs
 *.log
