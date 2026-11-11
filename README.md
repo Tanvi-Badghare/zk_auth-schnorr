@@ -1,91 +1,116 @@
 # zkauth-rs — Schnorr-Based Zero-Knowledge Authentication in Rust
 
-> ⚠️ Research Software Notice  
-> This project explores cryptographic protocol design and security trade-offs.  
-> It is experimental, unaudited, and MUST NOT be used in production systems.
+`zk-auth` is an experimental cryptographic authentication framework that replaces
+password storage with zero-knowledge proofs derived from the Schnorr identification
+protocol and the Fiat–Shamir transform.
+
+---
+
+> ⚠️ **Security Notice**
+>
+> This project is intended for **research and educational purposes only**.
+> It has **not undergone a formal security audit** and must **not be used in
+> production systems**. Cryptographic implementations are sensitive to subtle
+> flaws; real-world deployments require professional review and extensive
+> validation.
 
 ---
 
 ## Overview
 
-`zkauth-rs` is a research-oriented implementation of a zero-knowledge
-authentication protocol based on:
+`zkauth-rs` demonstrates how authentication can be achieved without:
 
-- The Schnorr Identification Protocol
-- The Fiat–Shamir transform (Random Oracle Model)
-
-The system demonstrates how authentication can be achieved without:
-
-- Storing passwords
+- Storing passwords or password hashes
 - Transmitting reusable credentials
 - Exposing secrets to the authenticating server
 
-The implementation explicitly models adversarial behavior and protocol invariants,
-prioritizing cryptographic correctness and replay resistance over deployment concerns.
+The implementation explicitly models adversarial behaviour and protocol
+invariants, prioritising cryptographic correctness and replay resistance over
+deployment concerns.
 
 ---
 
 ## Cryptographic Construction
 
-The protocol operates in a prime-order group and follows:
+The protocol operates over the **Ristretto255** prime-order group (additive
+notation) and follows the standard Schnorr / Fiat–Shamir construction:
 
-- Commitment:  
-  R = g^r
-- Challenge (Fiat–Shamir):  
-  c = H(R || public_key || server_nonce || username)
-- Response:  
-  z = r + c * x mod q
-- Verification:  
-  g^z = R * Y^c
+| Step | Operation |
+|------|-----------|
+| Commitment | `R = k·G` for random nonce `k` |
+| Challenge (Fiat–Shamir) | `e = H(domain ‖ R ‖ Y ‖ username ‖ nonce)` |
+| Response | `s = k + e·x mod q` |
+| Verification | `s·G == R + e·Y` |
+
+where `x` is the secret scalar, `Y = x·G` is the public key, and `G` is the
+Ristretto basepoint.
 
 Security relies on:
 
-- Discrete Logarithm Hardness
-- Random Oracle Model (Fiat–Shamir)
-- Secure nonce generation
-- Transcript binding (identity + nonce)
+- Discrete logarithm hardness in Ristretto255
+- Random Oracle Model (Fiat–Shamir heuristic)
+- Secure per-session nonce generation
+- Transcript binding (domain, identity, nonce)
 
 ---
 
 ## Security Properties
 
-- Zero-knowledge (no secret leakage)
-- Soundness (forgery resistance)
-- Replay resistance via server-issued nonces
-- Identity binding within transcript
-- Domain separation for cross-protocol safety
+| Property | Mechanism |
+|----------|-----------|
+| Zero-knowledge | No secret leaks from transcripts |
+| Soundness | Forgery requires solving discrete log |
+| Replay resistance | Server-issued single-use nonces |
+| Identity binding | Username bound into Fiat–Shamir transcript |
+| Domain separation | Distinct domain strings for registration vs authentication |
 
 ---
 
 ## Threat Model
 
-Assumes:
+**Assumed adversary capabilities:**
 
-- Active network adversaries
-- Replay and tampering attempts
-- Malicious clients
-- Honest-but-curious servers
+- Active network adversary (intercept, replay, tamper)
+- Malicious clients submitting forged proofs
+- Cross-session and cross-user replay attempts
+- Cross-protocol replay (registration proof → authentication)
 
-Does NOT defend against:
+**Out of scope:**
 
-- Side-channel attacks
-- Timing attacks
+- Side-channel and timing attacks
 - Compromised client devices
-- Denial-of-service attacks
+- Denial-of-service
 - Formal cryptographic verification
 
 ---
 
 ## Project Structure
-src/
-├── crypto/ # Schnorr, hashing, group operations
-├── models/ # Keypair, proofs
-├── protocol/ # Registration and authentication logic
-├── config/ # System configuration
-├── errors/ # Unified error types
-├── auth/ # Prover / verifier flows
-tests/ # Soundness, replay, integration tests
 
+```
+src/
+├── crypto/         # Schnorr proofs, Fiat–Shamir transcripts, curve operations
+├── models/         # Keypair, RegistrationProof, AuthenticationProof
+├── protocol/       # Registration and authentication protocol flows
+├── config.rs       # System configuration and constants
+├── errors.rs       # Unified error types
+└── lib.rs
+
+tests/
+├── unit_tests.rs               # Curve and proof primitives
+├── soundness_tests.rs          # Forking lemma and extractability
+├── zero_knowledge_proof_tests.rs  # HVZK and simulator correctness
+├── integration_tests.rs        # Full registration → authentication flows
+└── replay_attack_tests.rs      # Replay, forgery, and cross-protocol attacks
+```
+
+---
+
+## Roadmap
+
+- [ ] Benchmark suite (`benches/`)
+- [ ] Example flows (`examples/`)
+- [ ] Extended protocol documentation (`docs/`)
+- [ ] Formal security reduction notes
 
 ---
 
@@ -93,11 +118,10 @@ tests/ # Soundness, replay, integration tests
 
 This repository intentionally includes:
 
-- Structured attack simulations
-- Explicit failure case tests
-- Replay modeling
-- Weak RNG analysis
-- Protocol invariant enforcement
+- Structured attack simulations across five attack classes
+- Explicit failure-case tests (wrong keypair, forged nonce, tampered transcript)
+- Replay modelling (direct, cross-session, cross-user, cross-protocol)
+- Protocol invariant enforcement (nonce uniqueness, domain separation)
 
 It is designed as an applied cryptography learning and research artifact.
 
@@ -106,7 +130,7 @@ It is designed as an applied cryptography learning and research artifact.
 ## What This Project Is Not
 
 - ❌ Production-ready authentication software
-- ❌ A replacement for WebAuthn / OAuth / OIDC
+- ❌ A replacement for WebAuthn, OAuth, or OIDC
 - ❌ Formally verified cryptographic code
 
 ---
