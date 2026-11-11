@@ -37,9 +37,7 @@ fn bench_registry_register(c: &mut Criterion) {
 
     c.bench_function("registry_register", |b| {
         b.iter_batched(
-            || {
-                RegistrationRequest::new("bench-user", &keypair, &mut OsRng).unwrap()
-            },
+            || RegistrationRequest::new("bench-user", &keypair, &mut OsRng).unwrap(),
             |req| {
                 let mut registry = Registry::new();
                 registry.register(black_box(req)).unwrap();
@@ -55,7 +53,8 @@ fn bench_issue_challenge(c: &mut Criterion) {
 
     c.bench_function("issue_challenge", |b| {
         b.iter(|| {
-            auth.issue_challenge(black_box("alice"), &mut OsRng).unwrap()
+            auth.issue_challenge(black_box("alice"), &mut OsRng)
+                .unwrap()
         })
     });
 }
@@ -66,9 +65,7 @@ fn bench_auth_proof_new(c: &mut Criterion) {
     let challenge = auth.issue_challenge("alice", &mut OsRng).unwrap();
 
     c.bench_function("auth_proof_new", |b| {
-        b.iter(|| {
-            AuthProof::new(black_box(&challenge), black_box(&keypair), &mut OsRng).unwrap()
-        })
+        b.iter(|| AuthProof::new(black_box(&challenge), black_box(&keypair), &mut OsRng).unwrap())
     });
 }
 
@@ -84,7 +81,8 @@ fn bench_auth_verify(c: &mut Criterion) {
                 (auth, challenge, proof)
             },
             |(mut auth, challenge, proof)| {
-                auth.verify(black_box(&proof), black_box(&challenge)).unwrap()
+                auth.verify(black_box(&proof), black_box(&challenge))
+                    .unwrap()
             },
             criterion::BatchSize::SmallInput,
         )

@@ -13,8 +13,7 @@ fn bench_full_flow(c: &mut Criterion) {
     c.bench_function("end_to_end_full_flow", |b| {
         b.iter(|| {
             let keypair = Keypair::generate(&mut OsRng).unwrap();
-            let req =
-                RegistrationRequest::new(black_box("alice"), &keypair, &mut OsRng).unwrap();
+            let req = RegistrationRequest::new(black_box("alice"), &keypair, &mut OsRng).unwrap();
             let mut registry = Registry::new();
             registry.register(req).unwrap();
 
@@ -37,9 +36,12 @@ fn bench_auth_only_flow(c: &mut Criterion) {
         b.iter_batched(
             || Authenticator::new(&registry),
             |mut auth| {
-                let challenge = auth.issue_challenge(black_box("alice"), &mut OsRng).unwrap();
+                let challenge = auth
+                    .issue_challenge(black_box("alice"), &mut OsRng)
+                    .unwrap();
                 let proof = AuthProof::new(&challenge, black_box(&keypair), &mut OsRng).unwrap();
-                auth.verify(black_box(&proof), black_box(&challenge)).unwrap()
+                auth.verify(black_box(&proof), black_box(&challenge))
+                    .unwrap()
             },
             criterion::BatchSize::SmallInput,
         )
@@ -69,11 +71,13 @@ fn bench_registry_scale(c: &mut Criterion) {
             b.iter_batched(
                 || Authenticator::new(&registry),
                 |mut auth| {
-                    let challenge =
-                        auth.issue_challenge(black_box(&target_user), &mut OsRng).unwrap();
+                    let challenge = auth
+                        .issue_challenge(black_box(&target_user), &mut OsRng)
+                        .unwrap();
                     let proof =
                         AuthProof::new(&challenge, black_box(&target_kp), &mut OsRng).unwrap();
-                    auth.verify(black_box(&proof), black_box(&challenge)).unwrap()
+                    auth.verify(black_box(&proof), black_box(&challenge))
+                        .unwrap()
                 },
                 criterion::BatchSize::SmallInput,
             )
