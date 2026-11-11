@@ -7,6 +7,7 @@ use curve25519_dalek::{
     constants::RISTRETTO_BASEPOINT_POINT,
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar as DalekScalar,
+    traits::{Identity, IsIdentity},
 };
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -21,15 +22,26 @@ use crate::errors::{Result, ZkAuthError};
 // ---------------------------------------------------------------------------
 //
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
+/// A scalar modulo the Ristretto255 group order.
+///
+/// `Debug` is implemented manually so secret scalars are never printed.
+/// Equality is constant-time (provided by dalek).
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 #[serde(transparent)]
 pub struct Scalar(#[serde(with = "scalar_serde")] pub(crate) DalekScalar);
+
+impl fmt::Debug for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Scalar(<redacted>)")
+    }
+}
 
 impl Scalar {
     pub fn random<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
         Self(DalekScalar::random(rng))
     }
 
+    /// Decode a canonical (fully reduced) 32-byte scalar.
     pub fn from_bytes(bytes: &[u8; SCALAR_BYTE_LEN]) -> Result<Self> {
         DalekScalar::from_canonical_bytes(*bytes)
             .into_option()
@@ -57,12 +69,24 @@ impl Scalar {
         &self.0
     }
 
-    /// Construct scalar from hash output.
+    /// Construct a scalar from 32 bytes reduced mod q.
+    ///
+    /// Reducing only 256 bits introduces a small modular bias, so prefer
+    /// [`Scalar::from_wide_bytes`] for hash-derived values.
+    #[allow(dead_code)]
     pub(crate) fn from_hash_bytes(bytes: [u8; 32]) -> Self {
         Self(DalekScalar::from_bytes_mod_order(bytes))
     }
 
-    /// Construct directly from DalekScalar.
+    /// Construct a scalar from 64 uniform bytes (wide reduction mod q).
+    ///
+    /// Use this for hash-derived challenges: it removes the modular bias of
+    /// reducing only 256 bits.
+    pub(crate) fn from_wide_bytes(bytes: [u8; 64]) -> Self {
+        Self(DalekScalar::from_bytes_mod_order_wide(&bytes))
+    }
+
+    /// Construct directly from a dalek scalar.
     pub(crate) fn from_dalek(s: DalekScalar) -> Self {
         Self(s)
     }
@@ -113,10 +137,7 @@ impl Neg for &Scalar {
 }
 
 //
-// --- Scalar serde helper
-// FIX: serialize_bytes produces a JSON integer array that cannot be
-// deserialized back as &[u8]. Use hex strings instead — they round-trip
-// correctly with serde_json and all other formats.
+// --- Scalar serde helper (hex strings, canonical encodings only)
 //
 
 mod scalar_serde {
@@ -158,6 +179,7 @@ mod scalar_serde {
 pub struct Point(#[serde(with = "point_serde")] pub(crate) RistrettoPoint);
 
 impl Point {
+    /// Decode a compressed Ristretto point, rejecting invalid encodings.
     pub fn from_bytes(bytes: &[u8; POINT_BYTE_LEN]) -> Result<Self> {
         CompressedRistretto(*bytes)
             .decompress()
@@ -171,8 +193,15 @@ impl Point {
 
     /// Identity point.
     pub fn identity() -> Self {
-        use curve25519_dalek::traits::Identity;
         Self(RistrettoPoint::identity())
+    }
+
+    /// True if this is the group identity.
+    ///
+    /// The identity has discrete log 0, so it must never be accepted as a
+    /// public key: anyone can "prove" knowledge of it.
+    pub fn is_identity(&self) -> bool {
+        self.0.is_identity()
     }
 
     #[allow(dead_code)]
@@ -220,10 +249,7 @@ impl fmt::Display for Point {
 }
 
 //
-// ---------------------------------------------------------------------------
-// point_serde
-// FIX: same as scalar_serde — use hex strings for JSON compatibility.
-// ---------------------------------------------------------------------------
+// --- Point serde helper (hex strings, validated decompression)
 //
 
 mod point_serde {
@@ -261,3 +287,47 @@ mod point_serde {
 //
 
 pub const BASEPOINT: Point = Point(RISTRETTO_BASEPOINT_POINT);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::rngs::OsRng;
+
+    #[test]
+    fn debug_redacts_scalar() {
+        let s = Scalar::random(&mut OsRng);
+        let shown = format!("{:?}", s);
+        assert!(shown.contains("redacted"));
+        assert!(!shown.contains(&hex::encode(s.to_bytes())));
+    }
+
+    #[test]
+    fn non_canonical_scalar_rejected() {
+        assert!(Scalar::from_bytes(&[0xff; SCALAR_BYTE_LEN]).is_err());
+    }
+
+    #[test]
+    fn invalid_point_encoding_rejected() {
+        assert!(Point::from_bytes(&[0xff; POINT_BYTE_LEN]).is_err());
+    }
+
+    #[test]
+    fn identity_is_detected() {
+        assert!(Point::identity().is_identity());
+        assert!(!BASEPOINT.is_identity());
+    }
+
+    #[test]
+    fn wide_reduction_is_deterministic() {
+        let a = Scalar::from_wide_bytes([7u8; 64]);
+        let b = Scalar::from_wide_bytes([7u8; 64]);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn point_bytes_round_trip() {
+        let s = Scalar::random(&mut OsRng);
+        let p = &s * &BASEPOINT;
+        assert_eq!(Point::from_bytes(&p.to_bytes()).unwrap(), p);
+    }
+}

@@ -8,16 +8,20 @@ use crate::crypto::fiat_shamir::Transcript;
 
 const SCHNORR_DOMAIN: &str = "zkauth-schnorr-v1";
 
-/// A Schnorr proof of knowledge of discrete log.
+/// A Schnorr proof of knowledge of a discrete log.
 ///
 /// # Fields
 ///
 /// * `commitment` — `R = k·G` for a random nonce `k`
 /// * `response`   — `s = k + e·x mod q`
-// FIX: do NOT derive Serialize/Deserialize — SchnorrProof contains Point and
-// Scalar whose serde impls use serialize_bytes, which JSON round-trips as an
-// integer sequence that cannot be deserialized back as &[u8].
-// Instead, implement manually via a [u8; 64] shadow that JSON handles cleanly.
+///
+/// The challenge is `e = H("zkauth-schnorr-v1", R, Y, message)` computed via a
+/// length-prefixed [`Transcript`]. Protocol layers pass a 64-byte *binding*
+/// (username, public key, and for authentication the server nonce) as
+/// `message`.
+///
+/// Serialization is implemented manually through a raw `[u8; 32]` pair so that
+/// decoding always validates the point and the canonical scalar encoding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchnorrProof {
     pub commitment: Point,
@@ -71,7 +75,14 @@ impl SchnorrProof {
         }
     }
 
+    /// Verify the proof: `s·G == R + e·Y`.
+    ///
+    /// The identity element is rejected as a public key. Its discrete log is
+    /// 0, so the equation reduces to `s·G == R` and anyone could forge a proof.
     pub fn verify(&self, public: &Point, message: &[u8]) -> bool {
+        if public.is_identity() {
+            return false;
+        }
         let challenge = Self::compute_challenge(&self.commitment, public, message);
         let lhs = &self.response * &BASEPOINT;
         let rhs = &self.commitment + &(&challenge * public);
@@ -186,5 +197,28 @@ mod tests {
         let delta = Scalar::random(&mut rng);
         proof.response = &proof.response + &delta;
         assert!(!proof.verify(&public, b"msg"));
+    }
+
+    /// With Y = identity the check degenerates to s·G == R, which anyone can
+    /// satisfy by choosing s = k, R = k·G. The verifier must reject this.
+    #[test]
+    fn identity_public_key_forgery_rejected() {
+        let k = Scalar::random(&mut OsRng);
+        let forged = SchnorrProof {
+            commitment: &k * &BASEPOINT,
+            response: k,
+        };
+        assert!(!forged.verify(&Point::identity(), b"msg"));
+    }
+
+    #[test]
+    fn non_canonical_response_rejected_on_decode() {
+        let mut rng = OsRng;
+        let secret = Scalar::random(&mut rng);
+        let public = &secret * &BASEPOINT;
+        let proof = SchnorrProof::prove(&secret, &public, b"msg", &mut rng);
+        let mut bytes = proof.to_bytes();
+        bytes[32..].fill(0xff);
+        assert!(SchnorrProof::from_bytes(&bytes).is_err());
     }
 }
