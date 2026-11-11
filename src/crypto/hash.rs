@@ -1,21 +1,21 @@
 //! Cryptographic hashing primitives.
 //!
-//! This module wraps SHA-256 (via the `sha2` crate) behind a simple,
-//! consistent API. The primary use case is Fiat–Shamir transcript
-//! hashing, where multiple messages are fed into a single digest.
+//! This module wraps SHA-256 (via the `sha2` crate) behind a simple API.
 //!
 //! ## API
 //!
 //! * **One-shot hashing**: [`hash_bytes`] takes arbitrary bytes and
 //!   returns a 32-byte digest.
-//! * **Incremental (transcript) hashing**: [`Hasher`] lets you call
+//! * **Incremental hashing**: [`Hasher`] lets you call
 //!   [`update`][Hasher::update] multiple times before calling
-//!   [`finalize`][Hasher::finalize].
-//! * **Hash → Scalar**: [`hash_to_scalar`] securely derives a curve
-//!   scalar for Schnorr / Fiat–Shamir challenges.
+//!   [`finalize`][Hasher::finalize]. [`Transcript`][super::fiat_shamir::Transcript]
+//!   builds on it.
+//! * **Hash → Scalar**: [`hash_to_scalar`] derives a uniform curve scalar from
+//!   arbitrary data (SHA-512 + wide reduction).
 //!
-//! ⚠️ Always use `hash_to_scalar` for challenge derivation.
-//! Do NOT manually convert raw hash bytes into scalars.
+//! Fiat–Shamir challenges in this crate are derived through
+//! [`Transcript`][super::fiat_shamir::Transcript], which adds domain separation
+//! and length-prefixed labels. Prefer it over hashing raw concatenations.
 
 use sha2::Sha512;
 use sha2::{Digest as Sha2Digest, Sha256};
@@ -33,7 +33,7 @@ use crate::crypto::curves::Scalar;
 pub type Digest = [u8; HASH_BYTE_LEN];
 
 // ---------------------------------------------------------------------------
-// Hasher (incremental / transcript-based hashing)
+// Hasher (incremental hashing)
 // ---------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -77,19 +77,16 @@ pub fn hash_bytes(data: &[u8]) -> Digest {
 }
 
 // ---------------------------------------------------------------------------
-// Hash → Scalar (for Fiat–Shamir challenges)
+// Hash → Scalar
 // ---------------------------------------------------------------------------
 
 /// Hash arbitrary data into a curve scalar (mod group order).
 ///
-/// Uses SHA-512 internally and reduces modulo the curve order
-/// via `from_bytes_mod_order_wide`, ensuring uniform distribution.
+/// Uses SHA-512 and reduces the 64-byte output modulo the group order via
+/// `from_bytes_mod_order_wide`, giving a statistically uniform scalar.
 ///
-/// This function returns the crate's `Scalar` wrapper and does
-/// not expose dalek types outside this module.
+/// Returns the crate's `Scalar` wrapper; dalek types are not exposed.
 pub fn hash_to_scalar(data: &[u8]) -> Scalar {
-    use sha2::Digest;
-
     let mut hasher = Sha512::new();
     hasher.update(data);
     let wide_hash = hasher.finalize(); // 64 bytes
@@ -97,8 +94,7 @@ pub fn hash_to_scalar(data: &[u8]) -> Scalar {
     let mut wide_bytes = [0u8; 64];
     wide_bytes.copy_from_slice(&wide_hash);
 
-    let dalek = DalekScalar::from_bytes_mod_order_wide(&wide_bytes);
-    Scalar::from_dalek(dalek)
+    Scalar::from_dalek(DalekScalar::from_bytes_mod_order_wide(&wide_bytes))
 }
 
 // ---------------------------------------------------------------------------
@@ -108,9 +104,8 @@ pub fn hash_to_scalar(data: &[u8]) -> Scalar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex;
 
-    // --- SHA-256 Known Vectors --------------------------------------------
+    // --- SHA-256 known vectors --------------------------------------------
 
     #[test]
     fn hash_bytes_empty_input() {

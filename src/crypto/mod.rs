@@ -1,49 +1,39 @@
 //! Cryptographic primitives for zk-auth.
 //!
-//! This module provides the low-level building blocks that the rest of the
-//! library composes:
+//! * [`hash`] — SHA-256 hashing (one-shot and incremental).
+//! * [`curves`] — Ristretto255 scalars and points.
+//! * [`schnorr`] — Schnorr proof of knowledge (sigma protocol).
+//! * [`fiat_shamir`] — domain-separated transcript used to derive challenges.
 //!
-//! * [`hash`] — SHA-256 hashing (one-shot and transcript-based).
-//! * [`curves`] — Elliptic curve operations over Ristretto (curve25519).
-//! * [`schnorr`] — Schnorr identification protocol (sigma protocol).
-//! * [`fiat_shamir`] — Transform interactive proofs → non-interactive via
-//!   transcript hashing.
+//! The most common types are re-exported here, so downstream code can write
+//! `zk_auth::crypto::{Point, Scalar, SchnorrProof, Transcript}`.
 //!
-//! ## Re-exports
+//! ## Example
 //!
-//! The most commonly used types are re-exported at the module level so
-//! downstream code can write:
-//! ```ignore
-//! use zk_auth::crypto::{Hasher, Scalar, Point};
 //! ```
-//! instead of fully-qualified paths like `zk_auth::crypto::hash::Hasher`.
-
-// ---------------------------------------------------------------------------
-// Submodule declarations
-// ---------------------------------------------------------------------------
-
-//! Cryptographic primitives for zk-auth.
+//! use rand::rngs::OsRng;
+//! use zk_auth::crypto::{Hasher, SchnorrProof};
+//! use zk_auth::models::keypair::Keypair;
 //!
-//! This module provides:
-//! - Curve abstractions over Ristretto
-//! - Secure hashing utilities
-//! - Schnorr identification protocol
-//! - Fiat–Shamir transform
+//! let kp = Keypair::generate(&mut OsRng).unwrap();
+//!
+//! // Prove knowledge of the secret key, bound to a message.
+//! let proof = SchnorrProof::prove(kp.secret_key(), kp.public_key(), b"hello", &mut OsRng);
+//! assert!(proof.verify(kp.public_key(), b"hello"));
+//! assert!(!proof.verify(kp.public_key(), b"other message"));
+//!
+//! // SHA-256 digests are 32 bytes.
+//! let mut h = Hasher::new();
+//! h.update(b"abc");
+//! assert_eq!(h.finalize().len(), 32);
+//! ```
 
 pub mod curves;
 pub mod fiat_shamir;
 pub mod hash;
 pub mod schnorr;
 
-// Public re-exports (clean external API)
 pub use curves::{Point, Scalar, BASEPOINT};
-pub use hash::hash_to_scalar;
+pub use fiat_shamir::Transcript;
+pub use hash::{hash_bytes, hash_to_scalar, Hasher};
 pub use schnorr::SchnorrProof;
-// Curve types will be uncommented when curves.rs is implemented.
-// pub use curves::{Point, Scalar, BASEPOINT};
-
-// Schnorr types will be uncommented when schnorr.rs is implemented.
-// pub use schnorr::SchnorrProof;
-
-// Fiat-Shamir types will be uncommented when fiat_shamir.rs is implemented.
-// pub use fiat_shamir::Transcript;
