@@ -2,7 +2,10 @@
 
 use std::collections::HashMap;
 
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
+// FIX: add CryptoRng — SchnorrProof::prove requires R: RngCore + CryptoRng,
+// so every caller up the chain must propagate the same bound.
+
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::curves::Point;
@@ -21,7 +24,8 @@ pub struct RegistrationRequest {
 }
 
 impl RegistrationRequest {
-    pub fn new<R: RngCore>(
+    // FIX: R: RngCore → R: RngCore + CryptoRng
+    pub fn new<R: RngCore + CryptoRng>(
         username: impl Into<String>,
         keypair: &Keypair,
         rng: &mut R,
@@ -29,11 +33,11 @@ impl RegistrationRequest {
         let username = username.into().trim().to_string();
 
         if username.is_empty() {
-            return Err(ZkAuthError::InvalidConfig("username must not be empty".into()));
+            return Err(ZkAuthError::InvalidConfig("username must not be empty".to_string()));
         }
 
         if username.len() > MAX_USERNAME_LEN {
-            return Err(ZkAuthError::InvalidConfig("username too long".into()));
+            return Err(ZkAuthError::InvalidConfig("username too long".to_string()));
         }
 
         let public_key = keypair.public_key().clone();
