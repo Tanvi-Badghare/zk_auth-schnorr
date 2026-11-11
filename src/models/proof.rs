@@ -27,13 +27,16 @@ impl RegistrationProof {
         self.0.serialized_size()
     }
 
-    #[doc(hidden)]
-    pub(crate) fn inner(&self) -> &SchnorrProof {
+    // FIX: was pub(crate) — tests/ compiles as a separate crate and cannot
+    // see pub(crate) items. Changed to pub so unit_tests.rs can call
+    // proof.inner().commitment for the type-distinction assertion.
+    pub fn inner(&self) -> &SchnorrProof {
         &self.0
     }
 
-    #[doc(hidden)]
-    pub(crate) fn from_schnorr(proof: SchnorrProof) -> Self {
+    // FIX: was pub(crate) — same reason. unit_tests.rs calls
+    // RegistrationProof::from_schnorr(...) directly in proof_newtypes tests.
+    pub fn from_schnorr(proof: SchnorrProof) -> Self {
         Self(proof)
     }
 }
@@ -59,13 +62,13 @@ impl AuthenticationProof {
         self.0.serialized_size()
     }
 
-    #[doc(hidden)]
-    pub(crate) fn inner(&self) -> &SchnorrProof {
+    // FIX: was pub(crate) — same as RegistrationProof above.
+    pub fn inner(&self) -> &SchnorrProof {
         &self.0
     }
 
-    #[doc(hidden)]
-    pub(crate) fn from_schnorr(proof: SchnorrProof) -> Self {
+    // FIX: was pub(crate) — same as RegistrationProof above.
+    pub fn from_schnorr(proof: SchnorrProof) -> Self {
         Self(proof)
     }
 }

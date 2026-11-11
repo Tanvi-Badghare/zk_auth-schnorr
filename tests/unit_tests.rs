@@ -1,24 +1,4 @@
 //! Unit tests for individual crypto and model primitives.
-//!
-//! These tests exercise each component in isolation — no protocol state,
-//! no registry, no multi-step flows.  They are the first line of defence:
-//! if a primitive is broken, these tests catch it before the integration
-//! or security tests run.
-//!
-//! ## Coverage map
-//!
-//! | Section                     | What is tested                                   |
-//! |-----------------------------|--------------------------------------------------|
-//! | `scalar`                    | Construction, arithmetic, (de)serialisation      |
-//! | `point`                     | Construction, arithmetic, encoding               |
-//! | `scalar_point_algebra`      | Group-law properties (associativity, identity …) |
-//! | `hasher`                    | Incremental hashing, known vectors               |
-//! | `hash_to_scalar`            | Determinism, distribution                        |
-//! | `transcript`                | Domain separation, label binding, chaining       |
-//! | `schnorr`                   | Prove / verify, negative cases                   |
-//! | `keypair`                   | Generation, accessors, serialisation             |
-//! | `registration_proof`        | Round-trip bytes, newtype boundary               |
-//! | `authentication_proof`      | Round-trip bytes, newtype boundary               |
 
 use zk_auth::{
     config::{POINT_BYTE_LEN, SCALAR_BYTE_LEN},
@@ -42,11 +22,8 @@ use zk_auth::{
 mod scalar {
     use super::*;
 
-    // --- Construction -------------------------------------------------------
-
     #[test]
     fn random_scalars_are_nonzero() {
-        // Probability of hitting zero is negligible (1/2^252).
         let s = Scalar::random(&mut DeterministicRng::new(1));
         assert_ne!(s.to_bytes(), [0u8; SCALAR_BYTE_LEN]);
     }
@@ -61,8 +38,6 @@ mod scalar {
 
     #[test]
     fn from_bytes_rejects_non_canonical() {
-        // The group order l is slightly less than 2^252, so a 32-byte value
-        // with the top byte set to 0xFF is non-canonical.
         let mut bad = [0u8; SCALAR_BYTE_LEN];
         bad[31] = 0xFF;
         assert!(Scalar::from_bytes(&bad).is_err());
@@ -74,8 +49,6 @@ mod scalar {
         let s2 = Scalar::random(&mut DeterministicRng::new(11));
         assert_ne!(s1, s2);
     }
-
-    // --- Arithmetic ---------------------------------------------------------
 
     #[test]
     fn addition_is_commutative() {
@@ -102,10 +75,10 @@ mod scalar {
 
     #[test]
     fn negation_plus_self_is_zero() {
-    let a = Scalar::random(&mut DeterministicRng::new(50));
-    let neg_a = -&a;
-    let zero = &a + &neg_a;
-    assert_eq!(zero, Scalar::zero());
+        let a = Scalar::random(&mut DeterministicRng::new(50));
+        let neg_a = -&a;
+        let zero = &a + &neg_a;
+        assert_eq!(zero, Scalar::zero());
     }
 
     #[test]
@@ -114,8 +87,6 @@ mod scalar {
         let b = Scalar::random(&mut DeterministicRng::new(61));
         assert_eq!(&a * &b, &b * &a);
     }
-
-    // --- Serialisation ------------------------------------------------------
 
     #[test]
     fn serde_json_round_trips() {
@@ -127,7 +98,6 @@ mod scalar {
 
     #[test]
     fn serde_rejects_non_canonical_bytes() {
-        // Build a JSON byte array that encodes a non-canonical scalar.
         let mut bad = [0u8; SCALAR_BYTE_LEN];
         bad[31] = 0xFF;
         let json = serde_json::to_string(&bad.to_vec()).unwrap();
@@ -149,8 +119,6 @@ mod scalar {
 mod point {
     use super::*;
 
-    // --- Construction -------------------------------------------------------
-
     #[test]
     fn basepoint_encodes_and_decodes() {
         let bytes = BASEPOINT.to_bytes();
@@ -160,11 +128,6 @@ mod point {
 
     #[test]
     fn from_bytes_rejects_invalid_point() {
-        // All-zeros is not a valid Ristretto point (except the identity,
-        // but the all-zero compressed encoding is not the canonical identity).
-        let bad = [0u8; POINT_BYTE_LEN];
-        // May or may not be valid depending on the encoding; test that
-        // an arbitrary garbage buffer is rejected.
         let mut garbage = [0xFFu8; POINT_BYTE_LEN];
         garbage[0] = 0x01;
         assert!(Point::from_bytes(&garbage).is_err());
@@ -191,12 +154,9 @@ mod point {
         let s = Scalar::random(&mut DeterministicRng::new(102));
         let p = &s * &BASEPOINT;
         let hex_str = format!("{}", p);
-        // Should be 64 hex characters for 32 bytes.
         assert_eq!(hex_str.len(), 64);
         assert!(hex_str.chars().all(|c| c.is_ascii_hexdigit()));
     }
-
-    // --- Arithmetic ---------------------------------------------------------
 
     #[test]
     fn point_addition_is_commutative() {
@@ -210,7 +170,6 @@ mod point {
         let p = &Scalar::random(&mut DeterministicRng::new(120)) * &BASEPOINT;
         let neg_p = -&p;
         let identity = &p + &neg_p;
-        // The identity point encodes as all-zeros in Ristretto.
         assert_eq!(identity, Point::identity());
     }
 
@@ -224,14 +183,11 @@ mod point {
 }
 
 // ============================================================================
-// Scalar × Point algebra (group law)
+// Scalar × Point algebra
 // ============================================================================
 
 mod scalar_point_algebra {
     use super::*;
-
-    /// Scalar multiplication is the basis of the entire protocol.
-    /// These tests verify the group laws hold for our newtype wrappers.
 
     #[test]
     fn scalar_mult_basepoint_is_deterministic() {
@@ -250,11 +206,9 @@ mod scalar_point_algebra {
 
     #[test]
     fn distributivity_scalar_over_point_addition() {
-        // (a + b)·G == a·G + b·G
         let a = Scalar::random(&mut DeterministicRng::new(220));
         let b = Scalar::random(&mut DeterministicRng::new(221));
         let sum_scalar = &a + &b;
-
         let lhs = &sum_scalar * &BASEPOINT;
         let rhs = &(&a * &BASEPOINT) + &(&b * &BASEPOINT);
         assert_eq!(lhs, rhs);
@@ -262,11 +216,9 @@ mod scalar_point_algebra {
 
     #[test]
     fn associativity_of_scalar_mult() {
-        // (a * b) * G == a * (b * G)
         let a = Scalar::random(&mut DeterministicRng::new(230));
         let b = Scalar::random(&mut DeterministicRng::new(231));
         let b_g = &b * &BASEPOINT;
-
         let lhs = &(&a * &b) * &BASEPOINT;
         let rhs = &a * &b_g;
         assert_eq!(lhs, rhs);
@@ -308,11 +260,9 @@ mod hasher {
     #[test]
     fn incremental_equals_one_shot() {
         let one_shot = hash_bytes(b"hello world");
-
         let mut h = Hasher::new();
         h.update(b"hello ");
         h.update(b"world");
-
         assert_eq!(one_shot, h.finalize());
     }
 
@@ -320,27 +270,21 @@ mod hasher {
     fn cloned_hashers_diverge_independently() {
         let mut base = Hasher::new();
         base.update(b"shared prefix");
-
         let mut h1 = base.clone();
         let mut h2 = base.clone();
-
         h1.update(b"branch-A");
         h2.update(b"branch-B");
-
         assert_ne!(h1.finalize(), h2.finalize());
     }
 
     #[test]
     fn digest_length_is_32_bytes() {
-        let d = hash_bytes(b"test");
-        assert_eq!(d.len(), 32);
+        assert_eq!(hash_bytes(b"test").len(), 32);
     }
 
     #[test]
     fn different_inputs_produce_different_digests() {
-        let d1 = hash_bytes(b"foo");
-        let d2 = hash_bytes(b"bar");
-        assert_ne!(d1, d2);
+        assert_ne!(hash_bytes(b"foo"), hash_bytes(b"bar"));
     }
 }
 
@@ -353,16 +297,12 @@ mod hash_to_scalar_tests {
 
     #[test]
     fn is_deterministic() {
-        let s1 = hash_to_scalar(b"deterministic");
-        let s2 = hash_to_scalar(b"deterministic");
-        assert_eq!(s1, s2);
+        assert_eq!(hash_to_scalar(b"deterministic"), hash_to_scalar(b"deterministic"));
     }
 
     #[test]
     fn different_inputs_yield_different_scalars() {
-        let s1 = hash_to_scalar(b"input-A");
-        let s2 = hash_to_scalar(b"input-B");
-        assert_ne!(s1, s2);
+        assert_ne!(hash_to_scalar(b"input-A"), hash_to_scalar(b"input-B"));
     }
 
     #[test]
@@ -374,13 +314,12 @@ mod hash_to_scalar_tests {
     #[test]
     fn output_is_valid_canonical_scalar() {
         let s = hash_to_scalar(b"canonical-check");
-        // If it's canonical, from_bytes should succeed.
         assert!(Scalar::from_bytes(&s.to_bytes()).is_ok());
     }
 }
 
 // ============================================================================
-// Transcript (Fiat–Shamir)
+// Transcript
 // ============================================================================
 
 mod transcript {
@@ -389,47 +328,38 @@ mod transcript {
     #[test]
     fn same_inputs_produce_same_challenge() {
         let p = &Scalar::random(&mut DeterministicRng::new(300)) * &BASEPOINT;
-
         let mut t1 = Transcript::new("test-domain-v1");
         t1.append_point("pk", &p);
         t1.append_message("msg", b"hello");
         let c1 = t1.challenge_scalar("challenge");
-
         let mut t2 = Transcript::new("test-domain-v1");
         t2.append_point("pk", &p);
         t2.append_message("msg", b"hello");
         let c2 = t2.challenge_scalar("challenge");
-
         assert_eq!(c1, c2);
     }
 
     #[test]
     fn different_domains_produce_different_challenges() {
         let p = &Scalar::random(&mut DeterministicRng::new(310)) * &BASEPOINT;
-
         let mut t1 = Transcript::new("domain-A");
         t1.append_point("pk", &p);
         let c1 = t1.challenge_scalar("c");
-
         let mut t2 = Transcript::new("domain-B");
         t2.append_point("pk", &p);
         let c2 = t2.challenge_scalar("c");
-
         assert_ne!(c1, c2);
     }
 
     #[test]
     fn different_labels_produce_different_challenges() {
         let p = &Scalar::random(&mut DeterministicRng::new(320)) * &BASEPOINT;
-
         let mut t1 = Transcript::new("domain");
         t1.append_point("label-X", &p);
         let c1 = t1.challenge_scalar("c");
-
         let mut t2 = Transcript::new("domain");
         t2.append_point("label-Y", &p);
         let c2 = t2.challenge_scalar("c");
-
         assert_ne!(c1, c2);
     }
 
@@ -437,17 +367,14 @@ mod transcript {
     fn append_order_matters() {
         let p1 = &Scalar::random(&mut DeterministicRng::new(330)) * &BASEPOINT;
         let p2 = &Scalar::random(&mut DeterministicRng::new(331)) * &BASEPOINT;
-
         let mut t1 = Transcript::new("domain");
         t1.append_point("a", &p1);
         t1.append_point("b", &p2);
         let c1 = t1.challenge_scalar("c");
-
         let mut t2 = Transcript::new("domain");
-        t2.append_point("a", &p2); // swapped
+        t2.append_point("a", &p2);
         t2.append_point("b", &p1);
         let c2 = t2.challenge_scalar("c");
-
         assert_ne!(c1, c2);
     }
 
@@ -469,8 +396,6 @@ mod transcript {
 
     #[test]
     fn sequential_challenges_differ() {
-        // Calling challenge_scalar twice on the same transcript should
-        // advance the state and produce distinct values.
         let mut t = Transcript::new("sequential");
         t.append_message("msg", b"data");
         let c1 = t.challenge_scalar("round-1");
@@ -481,17 +406,13 @@ mod transcript {
     #[test]
     fn append_scalar_is_bound_into_challenge() {
         let s = Scalar::random(&mut DeterministicRng::new(340));
-
         let mut t1 = Transcript::new("scalar-binding");
         t1.append_scalar("s", &s);
         let c1 = t1.challenge_scalar("c");
-
-        // Different scalar → different challenge.
         let s2 = Scalar::random(&mut DeterministicRng::new(341));
         let mut t2 = Transcript::new("scalar-binding");
         t2.append_scalar("s", &s2);
         let c2 = t2.challenge_scalar("c");
-
         assert_ne!(c1, c2);
     }
 }
@@ -506,8 +427,9 @@ mod schnorr {
     fn make_proof(secret_seed: u64, nonce_seed: u64, msg: &[u8]) -> (Scalar, Point, SchnorrProof) {
         let secret = Scalar::random(&mut DeterministicRng::new(secret_seed));
         let public = &secret * &BASEPOINT;
-        let proof =
-            SchnorrProof::prove(&secret, &public, msg, &mut DeterministicRng::new(nonce_seed));
+        let proof = SchnorrProof::prove(
+            &secret, &public, msg, &mut DeterministicRng::new(nonce_seed),
+        );
         (secret, public, proof)
     }
 
@@ -534,7 +456,6 @@ mod schnorr {
     #[test]
     fn tampered_commitment_fails() {
         let (_, public, mut proof) = make_proof(430, 431, b"msg");
-        // Shift the commitment by adding the basepoint.
         proof.commitment = &proof.commitment + &BASEPOINT;
         assert!(!proof.verify(&public, b"msg"));
     }
@@ -549,31 +470,20 @@ mod schnorr {
 
     #[test]
     fn schnorr_equation_holds_algebraically() {
-        // s·G == R + e·Y  (where e is recomputed from the transcript)
-        // This test computes both sides manually to verify the algebraic identity.
         let (_, public, proof) = make_proof(450, 451, b"algebraic");
-
         let lhs = &proof.response * &BASEPOINT;
-        // We can't call compute_challenge directly here, but verify() does it.
-        // Passing the test implies the equation holds.
         assert!(proof.verify(&public, b"algebraic"));
-        // Extra: lhs should not equal the commitment alone (response ≠ nonce).
         assert_ne!(lhs, proof.commitment);
     }
 
     #[test]
     fn proof_from_different_nonces_verifies_same() {
-        // Two proofs for the same (secret, message) but different nonces
-        // should both verify — randomness only affects R and s, not soundness.
         let secret = Scalar::random(&mut DeterministicRng::new(460));
         let public = &secret * &BASEPOINT;
-
         let p1 = SchnorrProof::prove(&secret, &public, b"msg", &mut DeterministicRng::new(461));
         let p2 = SchnorrProof::prove(&secret, &public, b"msg", &mut DeterministicRng::new(462));
-
         assert!(p1.verify(&public, b"msg"));
         assert!(p2.verify(&public, b"msg"));
-        // But the proofs themselves should differ (different nonces → different R, s).
         assert_ne!(p1.commitment, p2.commitment);
     }
 }
@@ -658,24 +568,21 @@ mod proof_newtypes {
 
     #[test]
     fn registration_and_authentication_are_type_distinct() {
-    // Compile-time distinction test
-    fn takes_registration(_: RegistrationProof) {}
-    fn takes_authentication(_: AuthenticationProof) {}
+        fn takes_registration(_: RegistrationProof) {}
+        fn takes_authentication(_: AuthenticationProof) {}
 
-    let sp = make_schnorr(630);
-    let rp = RegistrationProof::from_schnorr(sp.clone());
-    let ap = AuthenticationProof::from_schnorr(sp);
+        let sp = make_schnorr(630);
+        let rp = RegistrationProof::from_schnorr(sp.clone());
+        let ap = AuthenticationProof::from_schnorr(sp);
 
-    takes_registration(rp);
-    takes_authentication(ap);
-    }
-
-        // Both inner proofs should still verify.
-        let secret = Scalar::random(&mut DeterministicRng::new(631));
-        let public = &secret * &BASEPOINT;
-        // (They were constructed with seed 630, not for this keypair — we just
-        //  check structural equality, not cryptographic validity here.)
+        // FIX: the original code had loose statements after this test's closing
+        // brace but still inside the mod block — they referenced rp/ap which
+        // had already been moved into takes_registration/takes_authentication.
+        // Moved the inner() assertion into this test before the values are moved.
         assert_eq!(rp.inner().commitment, ap.inner().commitment);
+
+        takes_registration(rp);
+        takes_authentication(ap);
     }
 
     #[test]
