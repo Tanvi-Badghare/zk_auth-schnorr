@@ -61,6 +61,9 @@ pub enum ZkAuthError {
     // FIX: removed bincode::Error (unmaintained). The library uses serde_json
     // for all serialization — serde_json::Error covers both directions.
     // =====================================================================
+    // =====================================================================
+    // Serialization
+    // =====================================================================
     #[error("Serialization error")]
     Serde(#[from] serde_json::Error),
 
