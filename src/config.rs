@@ -108,39 +108,47 @@ impl Default for ZkAuthConfig {
 
 impl ZkAuthConfig {
     pub fn validate(&self) -> Result<()> {
-        // FIX: InvalidConfig takes &'static str — cannot use format!() which
-        // produces String. All messages are now bare string literals.
-        // The constant values (32, 16) are embedded in the static strings
-        // directly since they are compile-time constants that never change.
+        // InvalidConfig(String) — format!() already produces String.
+        // Bare string literals need .to_string() to coerce &str → String.
 
         if self.crypto.scalar_byte_len != SCALAR_BYTE_LEN {
-            return Err(ZkAuthError::InvalidConfig("scalar_byte_len must be 32"));
+            return Err(ZkAuthError::InvalidConfig(format!(
+                "scalar_byte_len must be {}, got {}",
+                SCALAR_BYTE_LEN, self.crypto.scalar_byte_len
+            )));
         }
 
         if self.crypto.point_byte_len != POINT_BYTE_LEN {
-            return Err(ZkAuthError::InvalidConfig("point_byte_len must be 32"));
+            return Err(ZkAuthError::InvalidConfig(format!(
+                "point_byte_len must be {}, got {}",
+                POINT_BYTE_LEN, self.crypto.point_byte_len
+            )));
         }
 
         if self.crypto.hash_byte_len != HASH_BYTE_LEN {
-            return Err(ZkAuthError::InvalidConfig("hash_byte_len must be 32"));
+            return Err(ZkAuthError::InvalidConfig(format!(
+                "hash_byte_len must be {}, got {}",
+                HASH_BYTE_LEN, self.crypto.hash_byte_len
+            )));
         }
 
         if self.fiat_shamir.domain_separator.is_empty() {
             return Err(ZkAuthError::InvalidConfig(
-                "fiat_shamir.domain_separator must not be empty",
+                "fiat_shamir.domain_separator must not be empty".to_string(),
             ));
         }
 
         if self.protocol.max_username_len == 0 {
             return Err(ZkAuthError::InvalidConfig(
-                "protocol.max_username_len must be > 0",
+                "protocol.max_username_len must be > 0".to_string(),
             ));
         }
 
         if self.protocol.nonce_byte_len < 16 {
-            return Err(ZkAuthError::InvalidConfig(
-                "protocol.nonce_byte_len must be >= 16",
-            ));
+            return Err(ZkAuthError::InvalidConfig(format!(
+                "protocol.nonce_byte_len must be >= 16, got {}",
+                self.protocol.nonce_byte_len
+            )));
         }
 
         Ok(())
