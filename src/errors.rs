@@ -47,7 +47,6 @@ pub enum ZkAuthError {
     // =====================================================================
     // Registration / Authentication
     // =====================================================================
-
     #[error("User already registered: {0}")]
     UserAlreadyExists(String),
 
