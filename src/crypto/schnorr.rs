@@ -47,7 +47,10 @@ impl<'de> Deserialize<'de> for SchnorrProof {
             .map_err(|e| serde::de::Error::custom(format!("invalid commitment: {e}")))?;
         let response = Scalar::from_bytes(&raw.response)
             .map_err(|e| serde::de::Error::custom(format!("invalid response: {e}")))?;
-        Ok(Self { commitment, response })
+        Ok(Self {
+            commitment,
+            response,
+        })
     }
 }
 
@@ -62,7 +65,10 @@ impl SchnorrProof {
         let commitment = &nonce * &BASEPOINT;
         let challenge = Self::compute_challenge(&commitment, public, message);
         let response = &nonce + &(&challenge * secret);
-        SchnorrProof { commitment, response }
+        SchnorrProof {
+            commitment,
+            response,
+        }
     }
 
     pub fn verify(&self, public: &Point, message: &[u8]) -> bool {
@@ -94,7 +100,10 @@ impl SchnorrProof {
         r_bytes.copy_from_slice(&bytes[32..]);
         let commitment = Point::from_bytes(&c_bytes)?;
         let response = Scalar::from_bytes(&r_bytes)?;
-        Ok(Self { commitment, response })
+        Ok(Self {
+            commitment,
+            response,
+        })
     }
 
     pub fn serialized_size(&self) -> usize {

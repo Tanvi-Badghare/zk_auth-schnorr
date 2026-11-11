@@ -43,7 +43,10 @@ impl<'de> Deserialize<'de> for Keypair {
             .map_err(|e| serde::de::Error::custom(format!("invalid secret key: {e}")))?;
         let public_key = Point::from_bytes(&raw.public_key)
             .map_err(|e| serde::de::Error::custom(format!("invalid public key: {e}")))?;
-        Ok(Self { secret_key, public_key })
+        Ok(Self {
+            secret_key,
+            public_key,
+        })
     }
 }
 
@@ -51,7 +54,10 @@ impl Keypair {
     pub fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self> {
         let secret_key = Scalar::random(rng);
         let public_key = &secret_key * &BASEPOINT;
-        Ok(Self { secret_key, public_key })
+        Ok(Self {
+            secret_key,
+            public_key,
+        })
     }
 
     pub fn public_key(&self) -> &Point {
