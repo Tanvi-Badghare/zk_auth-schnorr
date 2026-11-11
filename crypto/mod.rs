@@ -22,25 +22,23 @@
 // Submodule declarations
 // ---------------------------------------------------------------------------
 
-/// SHA-256 hashing (one-shot and incremental).
-pub mod hash;
+//! Cryptographic primitives for zk-auth.
+//!
+//! This module provides:
+//! - Curve abstractions over Ristretto
+//! - Secure hashing utilities
+//! - Schnorr identification protocol
+//! - Fiat–Shamir transform
 
-/// Elliptic curve operations: scalars, points, arithmetic.
 pub mod curves;
-
-/// Schnorr identification protocol (prove knowledge of a discrete log).
+pub mod hash;
 pub mod schnorr;
-
-/// Fiat–Shamir transform: interactive proofs → non-interactive.
 pub mod fiat_shamir;
 
-// ---------------------------------------------------------------------------
-// Re-exports
-// ---------------------------------------------------------------------------
-
-// Hash primitives are always available.
-pub use hash::{Digest, Hasher, hash_bytes};
-
+// Public re-exports (clean external API)
+pub use curves::{Point, Scalar, BASEPOINT};
+pub use hash::hash_to_scalar;
+pub use schnorr::SchnorrProof;
 // Curve types will be uncommented when curves.rs is implemented.
 // pub use curves::{Point, Scalar, BASEPOINT};
 
