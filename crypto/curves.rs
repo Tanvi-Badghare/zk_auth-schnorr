@@ -41,8 +41,10 @@ impl Scalar {
         self.0.to_bytes()
     }
 
-    pub(crate) fn from_dalek(inner: DalekScalar) -> Self {
-        Self(inner)
+    /// Construct scalar from hash output (reduced mod group order).
+    /// Used internally by Fiat–Shamir.
+    pub(crate) fn from_hash_bytes(bytes: [u8; 32]) -> Self {
+        Self(DalekScalar::from_bytes_mod_order(bytes))
     }
 
     pub(crate) fn inner(&self) -> &DalekScalar {
@@ -187,37 +189,6 @@ impl Mul<&Point> for &Scalar {
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(self.to_bytes()))
-    }
-}
-
-// --- Point serde helper ---
-
-mod point_serde {
-    use super::*;
-    use serde::{Deserializer, Serializer};
-
-    pub fn serialize<S>(point: &RistrettoPoint, ser: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        ser.serialize_bytes(&point.compress().to_bytes())
-    }
-
-    pub fn deserialize<'de, D>(de: D) -> std::result::Result<RistrettoPoint, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let bytes: &[u8] = Deserialize::deserialize(de)?;
-        if bytes.len() != POINT_BYTE_LEN {
-            return Err(serde::de::Error::custom("point must be 32 bytes"));
-        }
-
-        let mut arr = [0u8; POINT_BYTE_LEN];
-        arr.copy_from_slice(bytes);
-
-        CompressedRistretto(arr)
-            .decompress()
-            .ok_or_else(|| serde::de::Error::custom("invalid Ristretto point"))
     }
 }
 
