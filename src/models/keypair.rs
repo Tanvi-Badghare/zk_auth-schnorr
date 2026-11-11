@@ -17,7 +17,11 @@
 //! keypairs in plaintext in production.  Use encrypted storage or a
 //! dedicated keystore.
 
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
+// FIX 1: was `use rand::RngCore` — CryptoRng was missing.
+// Scalar::random now requires R: RngCore + CryptoRng (dalek v4),
+// so generate() must propagate that bound to its own R parameter.
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -33,31 +37,30 @@ use crate::errors::Result;
 ///
 /// # Zeroization
 ///
-/// The `secret_key` field is wiped when the `Keypair` is dropped.
-/// `ZeroizeOnDrop` generates a `Drop` implementation that calls
-/// `zeroize()` on every field.  Do NOT also use `#[zeroize(drop)]`
-/// — that attribute generates a second `Drop` impl, which is a
-/// compile error ("conflicting implementations of trait `Drop`").
+/// Only `secret_key` needs zeroization — it is the only secret field.
+/// `public_key` is a public value; zeroizing it provides no security
+/// benefit and `Point` (wrapping `RistrettoPoint`) does not implement
+/// `Zeroize` because dalek deliberately omits it for public types.
+///
+/// We therefore derive `Zeroize` only on `secret_key` via
+/// `#[zeroize(skip)]` on `public_key`, and use `ZeroizeOnDrop` to
+/// trigger automatic zeroization at drop time.
 ///
 /// # Clone
 ///
 /// `Clone` is intentionally NOT derived.  Cloning a keypair duplicates
-/// the secret scalar in memory, which defeats zeroization because the
-/// clone would need to be dropped separately.  If you need to share the
-/// public key, call `keypair.public_key().clone()` instead.
+/// the secret scalar in memory, which defeats zeroization.
 #[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-// FIX: The original code had BOTH `#[derive(ZeroizeOnDrop)]` AND
-// `#[zeroize(drop)]` on the struct.  `ZeroizeOnDrop` already generates
-// a `Drop` impl that calls zeroize().  Adding `#[zeroize(drop)]`
-// generates a SECOND `Drop` impl, which Rust forbids:
-//   "conflicting implementations of trait `Drop` for type `Keypair`"
-// Solution: remove `#[zeroize(drop)]` entirely.  `ZeroizeOnDrop` alone
-// is sufficient and correct.
 pub struct Keypair {
     /// The secret scalar `x`.  Never log, print, or transmit this value.
     secret_key: Scalar,
 
     /// The public point `Y = x·G`.  Safe to share.
+    // FIX 2: Point does not implement Zeroize (RistrettoPoint is a public
+    // type and dalek omits Zeroize for it even with the "zeroize" feature).
+    // Marking it #[zeroize(skip)] tells the Zeroize derive macro to ignore
+    // this field.  The secret_key field is still zeroized on drop.
+    #[zeroize(skip)]
     public_key: Point,
 }
 
@@ -69,7 +72,9 @@ impl Keypair {
     /// * `rng` — Use [`OsRng`][rand::rngs::OsRng] in production.
     ///   Use [`DeterministicRng`][crate::test_utils::DeterministicRng]
     ///   only in tests.
-    pub fn generate<R: RngCore>(rng: &mut R) -> Result<Self> {
+    // FIX 1 (continued): bound widened from R: RngCore to R: RngCore + CryptoRng
+    // to match the bound on Scalar::random required by dalek v4.
+    pub fn generate<R: RngCore + CryptoRng>(rng: &mut R) -> Result<Self> {
         let secret_key = Scalar::random(rng);
         let public_key = &secret_key * &BASEPOINT;
         Ok(Self {
@@ -111,7 +116,7 @@ impl fmt::Debug for Keypair {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::DeterministicRng;
+    use crate::tests::test_utils::DeterministicRng;
 
     #[test]
     fn generate_succeeds() {
