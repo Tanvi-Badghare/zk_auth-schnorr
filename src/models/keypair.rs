@@ -8,17 +8,6 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use crate::crypto::curves::{Point, Scalar, BASEPOINT};
 use crate::errors::Result;
 
-// ---------------------------------------------------------------------------
-// Keypair
-// ---------------------------------------------------------------------------
-
-// FIX: do NOT derive Serialize/Deserialize directly on a ZeroizeOnDrop type.
-// The derived Deserialize constructs a temporary that gets dropped before
-// the value is returned — ZeroizeOnDrop fires on the temp and wipes the
-// secret key, so serde_round_trip always fails the secret_key equality check.
-//
-// Fix: implement Serialize/Deserialize manually via a plain shadow struct
-// that has no ZeroizeOnDrop, then move the fields into a real Keypair.
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct Keypair {
     secret_key: Scalar,
@@ -26,17 +15,22 @@ pub struct Keypair {
     public_key: Point,
 }
 
+// FIX: do not use Scalar/Point's serde impls — they call serialize_bytes which
+// JSON round-trips as a sequence of integers, but the deserializer expects
+// a borrowed byte slice.  Instead, serialize via a shadow struct that stores
+// raw [u8; 32] arrays, which JSON handles as integer sequences that we can
+// read back the same way.
 #[derive(Serialize, Deserialize)]
-struct KeypairSerde {
-    secret_key: Scalar,
-    public_key: Point,
+struct KeypairRaw {
+    secret_key: [u8; 32],
+    public_key: [u8; 32],
 }
 
 impl Serialize for Keypair {
     fn serialize<S: Serializer>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> {
-        KeypairSerde {
-            secret_key: self.secret_key.clone(),
-            public_key: self.public_key.clone(),
+        KeypairRaw {
+            secret_key: self.secret_key.to_bytes(),
+            public_key: self.public_key.to_bytes(),
         }
         .serialize(ser)
     }
@@ -44,11 +38,12 @@ impl Serialize for Keypair {
 
 impl<'de> Deserialize<'de> for Keypair {
     fn deserialize<D: Deserializer<'de>>(de: D) -> std::result::Result<Self, D::Error> {
-        let s = KeypairSerde::deserialize(de)?;
-        Ok(Self {
-            secret_key: s.secret_key,
-            public_key: s.public_key,
-        })
+        let raw = KeypairRaw::deserialize(de)?;
+        let secret_key = Scalar::from_bytes(&raw.secret_key)
+            .map_err(|e| serde::de::Error::custom(format!("invalid secret key: {e}")))?;
+        let public_key = Point::from_bytes(&raw.public_key)
+            .map_err(|e| serde::de::Error::custom(format!("invalid public key: {e}")))?;
+        Ok(Self { secret_key, public_key })
     }
 }
 
