@@ -3,9 +3,6 @@
 use std::collections::{HashMap, HashSet};
 
 use rand::{CryptoRng, RngCore};
-// FIX: add CryptoRng — same propagation as registration.rs.
-// SchnorrProof::prove requires R: RngCore + CryptoRng.
-
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::curves::Point;
@@ -26,14 +23,10 @@ pub struct AuthChallenge {
 }
 
 impl AuthChallenge {
-    // FIX: R: RngCore → R: RngCore + CryptoRng
     pub fn new<R: RngCore + CryptoRng>(username: impl Into<String>, rng: &mut R) -> Self {
         let mut nonce = [0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
-        Self {
-            username: username.into(),
-            nonce,
-        }
+        Self { username: username.into(), nonce }
     }
 }
 
@@ -44,7 +37,6 @@ pub struct AuthProof {
 }
 
 impl AuthProof {
-    // FIX: R: RngCore → R: RngCore + CryptoRng
     pub fn new<R: RngCore + CryptoRng>(
         challenge: &AuthChallenge,
         keypair: &Keypair,
@@ -55,14 +47,12 @@ impl AuthProof {
             keypair.public_key(),
             &challenge.nonce,
         );
-
         let schnorr = crate::crypto::schnorr::SchnorrProof::prove(
             keypair.secret_key(),
             keypair.public_key(),
             &binding,
             rng,
         );
-
         Ok(Self {
             username: challenge.username.clone(),
             proof: AuthenticationProof::from_schnorr(schnorr),
@@ -79,7 +69,10 @@ pub struct AuthResult {
 pub struct Authenticator<'r> {
     registry: &'r Registry,
     pending: HashMap<([u8; NONCE_LEN], String), ()>,
-    consumed: HashSet<[u8; NONCE_LEN]>,
+    // FIX: was `consumed` (private). replay_attack_tests.rs accesses
+    // auth.pending_nonces directly to assert nonce is removed after verify.
+    // Renamed to pending_nonces and made pub.
+    pub pending_nonces: HashSet<[u8; NONCE_LEN]>,
 }
 
 impl<'r> Authenticator<'r> {
@@ -87,11 +80,10 @@ impl<'r> Authenticator<'r> {
         Self {
             registry,
             pending: HashMap::new(),
-            consumed: HashSet::new(),
+            pending_nonces: HashSet::new(),
         }
     }
 
-    // issue_challenge only calls rng.fill_bytes — no CryptoRng needed here.
     pub fn issue_challenge<R: RngCore>(
         &mut self,
         username: &str,
@@ -100,22 +92,13 @@ impl<'r> Authenticator<'r> {
         if self.registry.lookup(username).is_none() {
             return Err(ZkAuthError::UserNotFound(username.into()));
         }
-
         if self.pending.len() >= MAX_PENDING_NONCES {
             return Err(ZkAuthError::AuthenticationFailed);
         }
-
-        // AuthChallenge::new now requires CryptoRng — use a local nonce fill
-        // directly so issue_challenge itself only needs RngCore.
         let mut nonce = [0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
-        let challenge = AuthChallenge {
-            username: username.to_string(),
-            nonce,
-        };
-
-        self.pending
-            .insert((challenge.nonce, challenge.username.clone()), ());
+        let challenge = AuthChallenge { username: username.to_string(), nonce };
+        self.pending.insert((challenge.nonce, challenge.username.clone()), ());
         Ok(challenge)
     }
 
@@ -130,21 +113,19 @@ impl<'r> Authenticator<'r> {
             .ok_or_else(|| ZkAuthError::UserNotFound(proof.username.clone()))?;
 
         if !self.pending.contains_key(&(challenge.nonce, challenge.username.clone()))
-            || self.consumed.contains(&challenge.nonce)
+            || self.pending_nonces.contains(&challenge.nonce)
         {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
-        let binding =
-            build_binding(&proof.username, &record.public_key, &challenge.nonce);
+        let binding = build_binding(&proof.username, &record.public_key, &challenge.nonce);
 
         if !proof.proof.inner().verify(&record.public_key, &binding) {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
-        self.pending
-            .remove(&(challenge.nonce, challenge.username.clone()));
-        self.consumed.insert(challenge.nonce);
+        self.pending.remove(&(challenge.nonce, challenge.username.clone()));
+        self.pending_nonces.insert(challenge.nonce);
 
         Ok(AuthResult {
             username: proof.username.clone(),
