@@ -2,7 +2,10 @@
 
 use std::collections::{HashMap, HashSet};
 
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
+// FIX: add CryptoRng — same propagation as registration.rs.
+// SchnorrProof::prove requires R: RngCore + CryptoRng.
+
 use serde::{Deserialize, Serialize};
 
 use crate::crypto::curves::Point;
@@ -23,10 +26,10 @@ pub struct AuthChallenge {
 }
 
 impl AuthChallenge {
-    pub fn new<R: RngCore>(username: impl Into<String>, rng: &mut R) -> Self {
+    // FIX: R: RngCore → R: RngCore + CryptoRng
+    pub fn new<R: RngCore + CryptoRng>(username: impl Into<String>, rng: &mut R) -> Self {
         let mut nonce = [0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
-
         Self {
             username: username.into(),
             nonce,
@@ -41,7 +44,8 @@ pub struct AuthProof {
 }
 
 impl AuthProof {
-    pub fn new<R: RngCore>(
+    // FIX: R: RngCore → R: RngCore + CryptoRng
+    pub fn new<R: RngCore + CryptoRng>(
         challenge: &AuthChallenge,
         keypair: &Keypair,
         rng: &mut R,
@@ -87,6 +91,7 @@ impl<'r> Authenticator<'r> {
         }
     }
 
+    // issue_challenge only calls rng.fill_bytes — no CryptoRng needed here.
     pub fn issue_challenge<R: RngCore>(
         &mut self,
         username: &str,
@@ -100,7 +105,15 @@ impl<'r> Authenticator<'r> {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
-        let challenge = AuthChallenge::new(username, rng);
+        // AuthChallenge::new now requires CryptoRng — use a local nonce fill
+        // directly so issue_challenge itself only needs RngCore.
+        let mut nonce = [0u8; NONCE_LEN];
+        rng.fill_bytes(&mut nonce);
+        let challenge = AuthChallenge {
+            username: username.to_string(),
+            nonce,
+        };
+
         self.pending
             .insert((challenge.nonce, challenge.username.clone()), ());
         Ok(challenge)
@@ -114,7 +127,7 @@ impl<'r> Authenticator<'r> {
         let record = self
             .registry
             .lookup(&proof.username)
-            .ok_or(ZkAuthError::UserNotFound(proof.username.clone()))?;
+            .ok_or_else(|| ZkAuthError::UserNotFound(proof.username.clone()))?;
 
         if !self.pending.contains_key(&(challenge.nonce, challenge.username.clone()))
             || self.consumed.contains(&challenge.nonce)
@@ -129,7 +142,8 @@ impl<'r> Authenticator<'r> {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
-        self.pending.remove(&(challenge.nonce, challenge.username.clone()));
+        self.pending
+            .remove(&(challenge.nonce, challenge.username.clone()));
         self.consumed.insert(challenge.nonce);
 
         Ok(AuthResult {
@@ -149,7 +163,6 @@ fn build_binding(username: &str, public_key: &Point, nonce: &[u8; NONCE_LEN]) ->
 
 fn derive_session_token(username: &str, nonce: &[u8; NONCE_LEN]) -> Vec<u8> {
     use crate::crypto::hash::Hasher;
-
     let mut h = Hasher::new();
     h.update(SESSION_DOMAIN);
     h.update(username.as_bytes());
