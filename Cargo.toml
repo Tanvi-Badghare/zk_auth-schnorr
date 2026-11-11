@@ -1,7 +1,119 @@
 [package]
-name = "zk-auth_application"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
+name          = "zk-auth"
+version       = "0.1.0"
+edition       = "2021"
+description   = "Research-grade Zero-Knowledge Authentication using Schnorr proofs and the Fiat–Shamir heuristic"
+authors       = ["Your Name <you@example.com>"]
+license       = "MIT"
+repository    = "https://github.com/yourusername/zk-auth"
+readme        = "README.md"
+keywords      = ["zero-knowledge", "authentication", "schnorr", "cryptography"]
+categories    = ["cryptography", "authentication"]
 
+# ---------------------------------------------------------------------------
+# Library target
+# ---------------------------------------------------------------------------
+# Crate names on crates.io allow hyphens, but Rust identifiers use underscores.
+# Declaring this explicitly avoids any ambiguity.
+[lib]
+name = "zk_auth"
+path = "src/lib.rs"
+
+# ---------------------------------------------------------------------------
+# Binary target  (CLI demo — src/main.rs)
+# ---------------------------------------------------------------------------
+[[bin]]
+name = "zk-auth"
+path = "src/main.rs"
+
+# ---------------------------------------------------------------------------
+# Dependencies  (production)
+# ---------------------------------------------------------------------------
 [dependencies]
+
+# --- error handling -----------------------------------------------------------
+# src/errors.rs  — #[derive(Error)] on ZkAuthError
+thiserror = "1"
+
+# --- serialization ------------------------------------------------------------
+# src/models/keypair.rs, proof.rs  — #[derive(Serialize, Deserialize)]
+# src/protocol/registration.rs, authentication.rs
+# src/config.rs  — config struct round-tripping
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- elliptic-curve & scalar arithmetic ---------------------------------------
+# src/crypto/curves.rs  — RistrettoPoint, Scalar
+#
+# curve25519-dalek is the standard crate for Schnorr / Ristretto in the
+# research and production ecosystem (used by Signal, Zcash, etc.).
+#
+# Feature flags:
+#   alloc  — needed for heap-allocated curve operations
+#   serde  — lets RistrettoPoint & Scalar serialise with serde
+#
+# "precomputed-tables" (a default feature) is intentionally disabled;
+# it bloats the binary with static lookup tables.  Re-enable in
+# experiments/ if benchmarks show a meaningful speedup.
+curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "serde"] }
+
+# --- hashing ------------------------------------------------------------------
+# src/crypto/hash.rs  — SHA-256 for Fiat–Shamir transcript hashing
+sha2 = "0.10"
+
+# --- randomness ---------------------------------------------------------------
+# src/crypto/curves.rs  — OsRng for key generation
+# src/test_utils.rs     — deterministic RNG fixtures in tests
+rand = "0.8"
+
+# --- secret-key hygiene -------------------------------------------------------
+# src/models/keypair.rs  — #[derive(Zeroize, ZeroizeOnDrop)] on private keys
+#
+# Overwrites secret scalars with zeros when they go out of scope so that
+# they do not linger in heap / stack memory.  Reviewers (and admissions
+# committees) notice when this is missing from a security project.
+zeroize = { version = "1", features = ["derive"] }
+
+# --- hex encoding -------------------------------------------------------------
+# src/models/keypair.rs  — Display impl for public keys (debug / logging)
+hex = "0.4"
+
+# ---------------------------------------------------------------------------
+# Dev-dependencies  (tests + benchmarks only)
+# ---------------------------------------------------------------------------
+[dev-dependencies]
+
+# benches/schnorr_bench.rs, auth_bench.rs, end_to_end_bench.rs
+criterion = { version = "0.5", features = ["html_reports"] }
+
+# ---------------------------------------------------------------------------
+# Benchmark targets
+# ---------------------------------------------------------------------------
+[[bench]]
+name             = "schnorr_bench"
+path             = "benches/schnorr_bench.rs"
+harness          = false   # we drive iteration ourselves via criterion
+
+[[bench]]
+name             = "auth_bench"
+path             = "benches/auth_bench.rs"
+harness          = false
+
+[[bench]]
+name             = "end_to_end_bench"
+path             = "benches/end_to_end_bench.rs"
+harness          = false
+
+# ---------------------------------------------------------------------------
+# Profile tweaks
+# ---------------------------------------------------------------------------
+
+# Release builds: prioritise speed for benchmarks
+[profile.release]
+opt-level   = 3
+lto         = true        # cross-crate link-time optimisation
+codegen-units = 1         # single codegen unit → best optimisation
+
+# Dev builds: keep debug info, but don't make dep compilation painfully slow
+[profile.dev.package."*"]
+opt-level = 1             # optimise dependencies even in debug mode
