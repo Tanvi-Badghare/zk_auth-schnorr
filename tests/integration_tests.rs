@@ -21,8 +21,8 @@ fn gen_keypair(seed: u64) -> Keypair {
 fn register_one(username: &str, kp_seed: u64, req_seed: u64) -> (Registry, Keypair) {
     let kp = gen_keypair(kp_seed);
     let mut registry = Registry::new();
-    let req = RegistrationRequest::new(username, &kp, &mut DeterministicRng::new(req_seed))
-        .unwrap();
+    let req =
+        RegistrationRequest::new(username, &kp, &mut DeterministicRng::new(req_seed)).unwrap();
     registry.register(req).unwrap();
     (registry, kp)
 }
@@ -99,10 +99,10 @@ mod multi_user_flow {
 
     const USERS: &[(&str, u64)] = &[
         ("alice", 200),
-        ("bob",   210),
+        ("bob", 210),
         ("carol", 220),
-        ("dave",  230),
-        ("eve",   240),
+        ("dave", 230),
+        ("eve", 240),
     ];
 
     fn populated_registry() -> (Registry, Vec<(&'static str, Keypair)>) {
@@ -110,8 +110,8 @@ mod multi_user_flow {
         let mut keypairs = Vec::new();
         for &(name, seed) in USERS.iter() {
             let kp = gen_keypair(seed);
-            let req = RegistrationRequest::new(name, &kp, &mut DeterministicRng::new(seed + 1))
-                .unwrap();
+            let req =
+                RegistrationRequest::new(name, &kp, &mut DeterministicRng::new(seed + 1)).unwrap();
             registry.register(req).unwrap();
             keypairs.push((name, kp));
         }
@@ -205,7 +205,10 @@ mod registration_errors {
             RegistrationRequest::new("grace", &kp1, &mut DeterministicRng::new(522)).unwrap();
         req.public_key = kp2.public_key().clone();
         let mut registry = Registry::new();
-        assert!(matches!(registry.register(req), Err(ZkAuthError::VerificationFailed)));
+        assert!(matches!(
+            registry.register(req),
+            Err(ZkAuthError::VerificationFailed)
+        ));
     }
 
     #[test]
@@ -215,7 +218,10 @@ mod registration_errors {
             RegistrationRequest::new("henry", &kp, &mut DeterministicRng::new(531)).unwrap();
         req.username = "mallory".to_string();
         let mut registry = Registry::new();
-        assert!(matches!(registry.register(req), Err(ZkAuthError::VerificationFailed)));
+        assert!(matches!(
+            registry.register(req),
+            Err(ZkAuthError::VerificationFailed)
+        ));
     }
 }
 
@@ -299,7 +305,9 @@ mod serialisation {
     fn auth_proof_survives_json_round_trip() {
         let (registry, kp) = register_one("mia", 720, 721);
         let mut auth = Authenticator::new(&registry);
-        let challenge = auth.issue_challenge("mia", &mut DeterministicRng::new(722)).unwrap();
+        let challenge = auth
+            .issue_challenge("mia", &mut DeterministicRng::new(722))
+            .unwrap();
         let proof = AuthProof::new(&challenge, &kp, &mut DeterministicRng::new(723)).unwrap();
         let json = serde_json::to_string(&proof).unwrap();
         let recovered: AuthProof = serde_json::from_str(&json).unwrap();
@@ -313,9 +321,8 @@ mod serialisation {
         let json = serde_json::to_string(&kp).unwrap();
         let recovered_kp: Keypair = serde_json::from_str(&json).unwrap();
         let mut registry = Registry::new();
-        let req =
-            RegistrationRequest::new("nina", &recovered_kp, &mut DeterministicRng::new(731))
-                .unwrap();
+        let req = RegistrationRequest::new("nina", &recovered_kp, &mut DeterministicRng::new(731))
+            .unwrap();
         registry.register(req).unwrap();
         let mut auth = Authenticator::new(&registry);
         let (challenge, proof) = challenge_and_prove(&mut auth, "nina", &recovered_kp, 732, 733);
@@ -352,8 +359,7 @@ mod registry {
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
         let kp = gen_keypair(810);
-        let req =
-            RegistrationRequest::new("paul", &kp, &mut DeterministicRng::new(811)).unwrap();
+        let req = RegistrationRequest::new("paul", &kp, &mut DeterministicRng::new(811)).unwrap();
         registry.register(req).unwrap();
         assert!(!registry.is_empty());
         assert_eq!(registry.len(), 1);

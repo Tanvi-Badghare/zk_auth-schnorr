@@ -26,7 +26,10 @@ impl AuthChallenge {
     pub fn new<R: RngCore + CryptoRng>(username: impl Into<String>, rng: &mut R) -> Self {
         let mut nonce = [0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
-        Self { username: username.into(), nonce }
+        Self {
+            username: username.into(),
+            nonce,
+        }
     }
 }
 
@@ -42,11 +45,7 @@ impl AuthProof {
         keypair: &Keypair,
         rng: &mut R,
     ) -> Result<Self> {
-        let binding = build_binding(
-            &challenge.username,
-            keypair.public_key(),
-            &challenge.nonce,
-        );
+        let binding = build_binding(&challenge.username, keypair.public_key(), &challenge.nonce);
         let schnorr = crate::crypto::schnorr::SchnorrProof::prove(
             keypair.secret_key(),
             keypair.public_key(),
@@ -97,22 +96,24 @@ impl<'r> Authenticator<'r> {
         }
         let mut nonce = [0u8; NONCE_LEN];
         rng.fill_bytes(&mut nonce);
-        let challenge = AuthChallenge { username: username.to_string(), nonce };
-        self.pending.insert((challenge.nonce, challenge.username.clone()), ());
+        let challenge = AuthChallenge {
+            username: username.to_string(),
+            nonce,
+        };
+        self.pending
+            .insert((challenge.nonce, challenge.username.clone()), ());
         Ok(challenge)
     }
 
-    pub fn verify(
-        &mut self,
-        proof: &AuthProof,
-        challenge: &AuthChallenge,
-    ) -> Result<AuthResult> {
+    pub fn verify(&mut self, proof: &AuthProof, challenge: &AuthChallenge) -> Result<AuthResult> {
         let record = self
             .registry
             .lookup(&proof.username)
             .ok_or_else(|| ZkAuthError::UserNotFound(proof.username.clone()))?;
 
-        if !self.pending.contains_key(&(challenge.nonce, challenge.username.clone()))
+        if !self
+            .pending
+            .contains_key(&(challenge.nonce, challenge.username.clone()))
             || self.pending_nonces.contains(&challenge.nonce)
         {
             return Err(ZkAuthError::AuthenticationFailed);
@@ -124,7 +125,8 @@ impl<'r> Authenticator<'r> {
             return Err(ZkAuthError::AuthenticationFailed);
         }
 
-        self.pending.remove(&(challenge.nonce, challenge.username.clone()));
+        self.pending
+            .remove(&(challenge.nonce, challenge.username.clone()));
         self.pending_nonces.insert(challenge.nonce);
 
         Ok(AuthResult {

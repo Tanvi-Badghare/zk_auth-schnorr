@@ -134,10 +134,10 @@ mod semantic {
 
     #[test]
     fn proof_for_wrong_public_key_fails() {
-    let (_, _public, proof) = make_proof(200, 201, b"msg");
-    let other_secret = Scalar::random(&mut DeterministicRng::new(202));
-    let other_public = &other_secret * &BASEPOINT;
-    assert!(!proof.verify(&other_public, b"msg"));
+        let (_, _public, proof) = make_proof(200, 201, b"msg");
+        let other_secret = Scalar::random(&mut DeterministicRng::new(202));
+        let other_public = &other_secret * &BASEPOINT;
+        assert!(!proof.verify(&other_public, b"msg"));
     }
 
     #[test]
@@ -150,7 +150,7 @@ mod semantic {
     fn proof_with_mixed_commitment_fails() {
         // Commitment from proof A, response from proof B.
         let (_, public, proof_a) = make_proof(220, 221, b"msg");
-        let (_, _,    proof_b) = make_proof(220, 222, b"msg"); // same secret, diff nonce
+        let (_, _, proof_b) = make_proof(220, 222, b"msg"); // same secret, diff nonce
 
         let mixed = SchnorrProof {
             commitment: proof_a.commitment.clone(),
@@ -162,7 +162,7 @@ mod semantic {
     #[test]
     fn proof_for_different_secret_fails_even_with_same_message() {
         let (_, _public_a, proof_a) = make_proof(230, 231, b"msg");
-        let (_, public_b, _)       = make_proof(232, 233, b"msg");
+        let (_, public_b, _) = make_proof(232, 233, b"msg");
 
         // proof_a is tied to public_a; verifying against public_b must fail.
         assert!(!proof_a.verify(&public_b, b"msg"));
@@ -256,15 +256,13 @@ mod special_soundness {
 
         // ── Extraction (forking lemma) ────────────────────────────────────────
         // x = (s₁ - s₂) / (e₁ - e₂)
-        let s_diff = &s1 - &s2;   // s₁ - s₂ = (e₁ - e₂)·x
-        let e_diff = &e1 - &e2;   // e₁ - e₂
+        let s_diff = &s1 - &s2; // s₁ - s₂ = (e₁ - e₂)·x
+        let e_diff = &e1 - &e2; // e₁ - e₂
 
         // Inversion: we need (e₁ - e₂)⁻¹.
         // Dalek's Scalar has invert() via the inner type; we access it through
         // the public `inner()` method and re-wrap.
-        let e_diff_inv = Scalar::from_bytes(
-            &e_diff.inner().invert().to_bytes()
-        ).unwrap();
+        let e_diff_inv = Scalar::from_bytes(&e_diff.inner().invert().to_bytes()).unwrap();
         // Safe: e1 != e2 ⇒ e_diff ≠ 0 ⇒ invert() is well-defined.
 
         let extracted_x = &s_diff * &e_diff_inv;
@@ -333,12 +331,12 @@ mod statistical {
         let public = &secret * &BASEPOINT;
 
         for i in 0u64..50 {
-            let fake_nonce   = Scalar::random(&mut DeterministicRng::new(2001 + i * 2));
+            let fake_nonce = Scalar::random(&mut DeterministicRng::new(2001 + i * 2));
             let fake_response = Scalar::random(&mut DeterministicRng::new(2002 + i * 2));
 
             let fake_proof = SchnorrProof {
                 commitment: &fake_nonce * &BASEPOINT,
-                response:   fake_response,
+                response: fake_response,
             };
 
             assert!(

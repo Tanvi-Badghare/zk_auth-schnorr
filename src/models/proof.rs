@@ -17,9 +17,7 @@ impl RegistrationProof {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(
-        bytes: &[u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN],
-    ) -> Result<Self> {
+    pub fn from_bytes(bytes: &[u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN]) -> Result<Self> {
         SchnorrProof::from_bytes(bytes).map(Self)
     }
 
@@ -52,9 +50,7 @@ impl AuthenticationProof {
         self.0.to_bytes()
     }
 
-    pub fn from_bytes(
-        bytes: &[u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN],
-    ) -> Result<Self> {
+    pub fn from_bytes(bytes: &[u8; POINT_BYTE_LEN + SCALAR_BYTE_LEN]) -> Result<Self> {
         SchnorrProof::from_bytes(bytes).map(Self)
     }
 

@@ -28,7 +28,13 @@ fn simulate_schnorr(
     let sg = &s * &BASEPOINT;
     let ey = &e * public;
     let r = &sg - &ey;
-    (SchnorrProof { commitment: r, response: s }, e)
+    (
+        SchnorrProof {
+            commitment: r,
+            response: s,
+        },
+        e,
+    )
 }
 
 // ============================================================================
@@ -47,7 +53,10 @@ mod simulator {
         let (sim, e) = simulate_schnorr(&public, 2, 3);
         let lhs = &sim.response * &BASEPOINT;
         let rhs = &sim.commitment + &(&e * &public);
-        assert_eq!(lhs, rhs, "simulated transcript must satisfy Schnorr equation");
+        assert_eq!(
+            lhs, rhs,
+            "simulated transcript must satisfy Schnorr equation"
+        );
     }
 
     #[test]
@@ -119,10 +128,15 @@ mod field_independence {
         let pub_a = &secret_a * &BASEPOINT;
         let pub_b = &secret_b * &BASEPOINT;
 
-        let proof_a = SchnorrProof::prove(&secret_a, &pub_a, b"msg", &mut DeterministicRng::new(122));
-        let proof_b = SchnorrProof::prove(&secret_b, &pub_b, b"msg", &mut DeterministicRng::new(122));
+        let proof_a =
+            SchnorrProof::prove(&secret_a, &pub_a, b"msg", &mut DeterministicRng::new(122));
+        let proof_b =
+            SchnorrProof::prove(&secret_b, &pub_b, b"msg", &mut DeterministicRng::new(122));
 
-        assert_eq!(proof_a.commitment, proof_b.commitment, "R = k·G is independent of secret");
+        assert_eq!(
+            proof_a.commitment, proof_b.commitment,
+            "R = k·G is independent of secret"
+        );
     }
 
     #[test]
@@ -132,8 +146,10 @@ mod field_independence {
         let pub_a = &secret_a * &BASEPOINT;
         let pub_b = &secret_b * &BASEPOINT;
 
-        let proof_a = SchnorrProof::prove(&secret_a, &pub_a, b"msg", &mut DeterministicRng::new(132));
-        let proof_b = SchnorrProof::prove(&secret_b, &pub_b, b"msg", &mut DeterministicRng::new(132));
+        let proof_a =
+            SchnorrProof::prove(&secret_a, &pub_a, b"msg", &mut DeterministicRng::new(132));
+        let proof_b =
+            SchnorrProof::prove(&secret_b, &pub_b, b"msg", &mut DeterministicRng::new(132));
 
         assert_ne!(proof_a.response, proof_b.response);
     }
@@ -151,11 +167,12 @@ mod protocol_zk {
         let kp1 = Keypair::generate(&mut DeterministicRng::new(200)).unwrap();
         let kp2 = Keypair::generate(&mut DeterministicRng::new(201)).unwrap();
 
-        let req1 = RegistrationRequest::new("alice", &kp1, &mut DeterministicRng::new(202)).unwrap();
-        let req2 = RegistrationRequest::new("bob",   &kp2, &mut DeterministicRng::new(203)).unwrap();
+        let req1 =
+            RegistrationRequest::new("alice", &kp1, &mut DeterministicRng::new(202)).unwrap();
+        let req2 = RegistrationRequest::new("bob", &kp2, &mut DeterministicRng::new(203)).unwrap();
 
         assert_ne!(req1.proof.inner().commitment, req2.proof.inner().commitment);
-        assert_ne!(req1.proof.inner().response,   req2.proof.inner().response);
+        assert_ne!(req1.proof.inner().response, req2.proof.inner().response);
     }
 
     #[test]
@@ -167,14 +184,18 @@ mod protocol_zk {
 
         let mut auth = Authenticator::new(&registry);
 
-        let c1 = auth.issue_challenge("carol", &mut DeterministicRng::new(212)).unwrap();
-        let c2 = auth.issue_challenge("carol", &mut DeterministicRng::new(213)).unwrap();
+        let c1 = auth
+            .issue_challenge("carol", &mut DeterministicRng::new(212))
+            .unwrap();
+        let c2 = auth
+            .issue_challenge("carol", &mut DeterministicRng::new(213))
+            .unwrap();
 
         let p1 = AuthProof::new(&c1, &kp, &mut DeterministicRng::new(214)).unwrap();
         let p2 = AuthProof::new(&c2, &kp, &mut DeterministicRng::new(215)).unwrap();
 
         assert_ne!(p1.proof.inner().commitment, p2.proof.inner().commitment);
-        assert_ne!(p1.proof.inner().response,   p2.proof.inner().response);
+        assert_ne!(p1.proof.inner().response, p2.proof.inner().response);
 
         let r1 = auth.verify(&p1, &c1).unwrap();
         let r2 = auth.verify(&p2, &c2).unwrap();
@@ -193,7 +214,9 @@ mod protocol_zk {
 
         let commitments: Vec<Point> = (0u64..10)
             .map(|i| {
-                let c = auth.issue_challenge("dave", &mut DeterministicRng::new(300 + i)).unwrap();
+                let c = auth
+                    .issue_challenge("dave", &mut DeterministicRng::new(300 + i))
+                    .unwrap();
                 let p = AuthProof::new(&c, &kp, &mut DeterministicRng::new(400 + i)).unwrap();
                 auth.verify(&p, &c).unwrap();
                 p.proof.inner().commitment.clone()
@@ -222,7 +245,10 @@ mod protocol_zk {
             &mut DeterministicRng::new(231),
         );
 
-        assert_eq!(proof.commitment, expected_r, "commitment must equal nonce·G");
+        assert_eq!(
+            proof.commitment, expected_r,
+            "commitment must equal nonce·G"
+        );
     }
 }
 
@@ -240,8 +266,13 @@ mod hvzk {
 
         let responses: Vec<Scalar> = (0u64..20)
             .map(|i| {
-                SchnorrProof::prove(&secret, &public, b"msg", &mut DeterministicRng::new(501 + i))
-                    .response
+                SchnorrProof::prove(
+                    &secret,
+                    &public,
+                    b"msg",
+                    &mut DeterministicRng::new(501 + i),
+                )
+                .response
             })
             .collect();
 
@@ -256,7 +287,12 @@ mod hvzk {
     fn proof_fields_are_not_trivially_related_to_public_key() {
         let secret = Scalar::random(&mut DeterministicRng::new(510));
         let public = &secret * &BASEPOINT;
-        let proof = SchnorrProof::prove(&secret, &public, b"non-trivial", &mut DeterministicRng::new(511));
+        let proof = SchnorrProof::prove(
+            &secret,
+            &public,
+            b"non-trivial",
+            &mut DeterministicRng::new(511),
+        );
 
         assert_ne!(proof.commitment.to_bytes(), public.to_bytes());
         assert_ne!(proof.commitment.to_bytes(), BASEPOINT.to_bytes());

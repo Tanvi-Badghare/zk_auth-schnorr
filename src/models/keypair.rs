@@ -1,37 +1,55 @@
 //! Public/private key pairs for zk-auth.
-//!
-//! A [`Keypair`] consists of:
-//! * A **secret key** (scalar `x`), kept private.
-//! * A **public key** (point `Y = x * G`), shared with verifiers.
-//!
-//! ## Security
-//!
-//! The secret key is automatically zeroized when the [`Keypair`] is dropped
-//! via [`ZeroizeOnDrop`][zeroize::ZeroizeOnDrop].
-//!
-//! ## Serialization
-//!
-//! ⚠️ **WARNING**: [`Keypair`] serializes **both** the public and secret keys.
-//! Do not store serialized keypairs in plaintext in production.
 
 use rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::crypto::curves::{Point, Scalar, BASEPOINT};
 use crate::errors::Result;
 
-#[derive(Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
-pub struct Keypair {
-    /// The secret scalar `x`.  Never log, print, or transmit this value.
-    secret_key: Scalar,
+// ---------------------------------------------------------------------------
+// Keypair
+// ---------------------------------------------------------------------------
 
-    /// The public point `Y = x·G`.  Safe to share.
-    /// Marked skip because RistrettoPoint does not implement Zeroize —
-    /// dalek omits it for public types. Only secret_key needs zeroization.
+// FIX: do NOT derive Serialize/Deserialize directly on a ZeroizeOnDrop type.
+// The derived Deserialize constructs a temporary that gets dropped before
+// the value is returned — ZeroizeOnDrop fires on the temp and wipes the
+// secret key, so serde_round_trip always fails the secret_key equality check.
+//
+// Fix: implement Serialize/Deserialize manually via a plain shadow struct
+// that has no ZeroizeOnDrop, then move the fields into a real Keypair.
+#[derive(Zeroize, ZeroizeOnDrop)]
+pub struct Keypair {
+    secret_key: Scalar,
     #[zeroize(skip)]
     public_key: Point,
+}
+
+#[derive(Serialize, Deserialize)]
+struct KeypairSerde {
+    secret_key: Scalar,
+    public_key: Point,
+}
+
+impl Serialize for Keypair {
+    fn serialize<S: Serializer>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> {
+        KeypairSerde {
+            secret_key: self.secret_key.clone(),
+            public_key: self.public_key.clone(),
+        }
+        .serialize(ser)
+    }
+}
+
+impl<'de> Deserialize<'de> for Keypair {
+    fn deserialize<D: Deserializer<'de>>(de: D) -> std::result::Result<Self, D::Error> {
+        let s = KeypairSerde::deserialize(de)?;
+        Ok(Self {
+            secret_key: s.secret_key,
+            public_key: s.public_key,
+        })
+    }
 }
 
 impl Keypair {
@@ -63,8 +81,6 @@ impl fmt::Debug for Keypair {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // FIX: lib.rs declares `#[cfg(test)] pub mod test_utils` at the crate root,
-    // so the correct path is crate::test_utils, not crate::tests::test_utils.
     use crate::test_utils::DeterministicRng;
 
     #[test]
