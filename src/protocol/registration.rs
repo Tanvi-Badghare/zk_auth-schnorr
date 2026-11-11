@@ -13,10 +13,31 @@ use crate::models::{Keypair, RegistrationProof};
 const REGISTRATION_DOMAIN: &str = "zkauth-registration-v1";
 const MAX_USERNAME_LEN: usize = 128;
 
-// FIX: RegistrationRequest contains `public_key: Point` whose serde uses
-// serialize_bytes — JSON encodes that as an integer sequence which cannot be
-// deserialized back as &[u8].  Implement Serialize/Deserialize manually via a
-// shadow struct that stores public_key as [u8; 32].
+/// Validate a username in canonical form.
+///
+/// Applied both when building a request and when verifying one, because a
+/// remote client can submit a request without going through
+/// [`RegistrationRequest::new`].
+fn validate_username(username: &str) -> Result<()> {
+    if username.is_empty() {
+        return Err(ZkAuthError::InvalidConfig(
+            "username must not be empty".to_string(),
+        ));
+    }
+    if username.len() > MAX_USERNAME_LEN {
+        return Err(ZkAuthError::InvalidConfig("username too long".to_string()));
+    }
+    if username != username.trim() || username.chars().any(char::is_control) {
+        return Err(ZkAuthError::InvalidConfig(
+            "username must not contain control characters or surrounding whitespace".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+// RegistrationRequest contains `public_key: Point`. It is (de)serialised
+// manually through a shadow struct that stores the key as [u8; 32], so
+// decoding always validates the point.
 #[derive(Debug, Clone)]
 pub struct RegistrationRequest {
     pub username: String,
@@ -28,7 +49,7 @@ pub struct RegistrationRequest {
 struct RegistrationRequestRaw {
     username: String,
     public_key: [u8; 32],
-    proof: RegistrationProof, // SchnorrProof inside now uses [u8;32] shadow too
+    proof: RegistrationProof,
 }
 
 impl Serialize for RegistrationRequest {
@@ -55,6 +76,15 @@ impl<'de> Deserialize<'de> for RegistrationRequest {
     }
 }
 
+/// Binding message that the registration proof signs: domain, username and
+/// public key.
+fn registration_binding(username: &str, public_key: &Point) -> Vec<u8> {
+    let mut transcript = Transcript::new(REGISTRATION_DOMAIN);
+    transcript.append_message("username", username.as_bytes());
+    transcript.append_point("public_key", public_key);
+    transcript.challenge_bytes("binding", 64)
+}
+
 impl RegistrationRequest {
     pub fn new<R: RngCore + CryptoRng>(
         username: impl Into<String>,
@@ -62,22 +92,10 @@ impl RegistrationRequest {
         rng: &mut R,
     ) -> Result<Self> {
         let username = username.into().trim().to_string();
-
-        if username.is_empty() {
-            return Err(ZkAuthError::InvalidConfig(
-                "username must not be empty".to_string(),
-            ));
-        }
-        if username.len() > MAX_USERNAME_LEN {
-            return Err(ZkAuthError::InvalidConfig("username too long".to_string()));
-        }
+        validate_username(&username)?;
 
         let public_key = keypair.public_key().clone();
-
-        let mut transcript = Transcript::new(REGISTRATION_DOMAIN);
-        transcript.append_message("username", username.as_bytes());
-        transcript.append_point("public_key", &public_key);
-        let binding = transcript.challenge_bytes("binding", 64);
+        let binding = registration_binding(&username, &public_key);
 
         let schnorr = crate::crypto::schnorr::SchnorrProof::prove(
             keypair.secret_key(),
@@ -95,10 +113,15 @@ impl RegistrationRequest {
     }
 
     pub fn verify(&self) -> Result<()> {
-        let mut transcript = Transcript::new(REGISTRATION_DOMAIN);
-        transcript.append_message("username", self.username.as_bytes());
-        transcript.append_point("public_key", &self.public_key);
-        let binding = transcript.challenge_bytes("binding", 64);
+        validate_username(&self.username)?;
+
+        // The identity element has discrete log 0, so anyone can "prove"
+        // knowledge of it. Never accept it as a public key.
+        if self.public_key.is_identity() {
+            return Err(ZkAuthError::InvalidPoint);
+        }
+
+        let binding = registration_binding(&self.username, &self.public_key);
 
         if self.proof.inner().verify(&self.public_key, &binding) {
             Ok(())
@@ -149,5 +172,47 @@ impl Registry {
 
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::rngs::OsRng;
+
+    fn valid_request(name: &str) -> RegistrationRequest {
+        let kp = Keypair::generate(&mut OsRng).unwrap();
+        RegistrationRequest::new(name, &kp, &mut OsRng).unwrap()
+    }
+
+    #[test]
+    fn valid_request_verifies() {
+        assert!(valid_request("alice").verify().is_ok());
+    }
+
+    #[test]
+    fn verify_rejects_hand_built_bad_usernames() {
+        // Bypass `new` the way a remote client could via JSON.
+        for bad in [
+            "",
+            " alice",
+            "alice ",
+            "ali\nce",
+            &"a".repeat(MAX_USERNAME_LEN + 1),
+        ] {
+            let mut req = valid_request("alice");
+            req.username = bad.to_string();
+            assert!(req.verify().is_err(), "accepted {bad:?}");
+        }
+    }
+
+    #[test]
+    fn duplicate_username_rejected() {
+        let mut registry = Registry::new();
+        registry.register(valid_request("alice")).unwrap();
+        assert!(matches!(
+            registry.register(valid_request("alice")),
+            Err(ZkAuthError::UserAlreadyExists(_))
+        ));
     }
 }
