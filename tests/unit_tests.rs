@@ -447,7 +447,7 @@ mod schnorr {
 
     #[test]
     fn wrong_public_key_fails() {
-        let (_, public, proof) = make_proof(420, 421, b"msg");
+        let (_, _public, proof) = make_proof(420, 421, b"msg");
         let other_secret = Scalar::random(&mut DeterministicRng::new(422));
         let other_public = &other_secret * &BASEPOINT;
         assert!(!proof.verify(&other_public, b"msg"));

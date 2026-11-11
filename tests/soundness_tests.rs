@@ -134,10 +134,10 @@ mod semantic {
 
     #[test]
     fn proof_for_wrong_public_key_fails() {
-        let (_, public, proof) = make_proof(200, 201, b"msg");
-        let other_secret = Scalar::random(&mut DeterministicRng::new(202));
-        let other_public = &other_secret * &BASEPOINT;
-        assert!(!proof.verify(&other_public, b"msg"));
+    let (_, _public, proof) = make_proof(200, 201, b"msg");
+    let other_secret = Scalar::random(&mut DeterministicRng::new(202));
+    let other_public = &other_secret * &BASEPOINT;
+    assert!(!proof.verify(&other_public, b"msg"));
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod semantic {
 
     #[test]
     fn proof_for_different_secret_fails_even_with_same_message() {
-        let (_, public_a, proof_a) = make_proof(230, 231, b"msg");
+        let (_, _public_a, proof_a) = make_proof(230, 231, b"msg");
         let (_, public_b, _)       = make_proof(232, 233, b"msg");
 
         // proof_a is tied to public_a; verifying against public_b must fail.
